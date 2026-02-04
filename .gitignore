@@ -1,0 +1,25 @@
+# Build artifacts
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+
+# Visual Studio cache/options directory
+.vs/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Dependency cache
+.deps-cache/
+
+# Test results
+*.deps.json
+
+# IDE files
+*.swp
+*~
+.DS_Store

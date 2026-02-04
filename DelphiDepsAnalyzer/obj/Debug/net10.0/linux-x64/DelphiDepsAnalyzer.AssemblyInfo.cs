@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("DelphiDepsAnalyzer")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4aa1515532eb75ce9b5cd166d8ca6a69cdcf6706")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+44d94a446e46382f66b3605b5a51513cd75800d8")]
 [assembly: System.Reflection.AssemblyProductAttribute("DelphiDepsAnalyzer")]
 [assembly: System.Reflection.AssemblyTitleAttribute("DelphiDepsAnalyzer")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
