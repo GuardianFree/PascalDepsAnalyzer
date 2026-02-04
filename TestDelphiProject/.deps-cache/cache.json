@@ -76,5 +76,83 @@
       ]
     },
     "cachedAt": "2026-02-04T15:18:48.8954654Z"
+  },
+  "/home/runner/work/PascalDepsAnalyzer/PascalDepsAnalyzer/TestDelphiProject/TestProject.dpr": {
+    "filePath": "/home/runner/work/PascalDepsAnalyzer/PascalDepsAnalyzer/TestDelphiProject/TestProject.dpr",
+    "fileHash": "A6BC6B7205DAC1D551CDC0F02DB81530926FF20EBEC8CE1C5B5B18B0BF8FCE48",
+    "unit": {
+      "filePath": "/home/runner/work/PascalDepsAnalyzer/PascalDepsAnalyzer/TestDelphiProject/TestProject.dpr",
+      "unitName": "TestProject",
+      "interfaceUses": [
+        "System.SysUtils",
+        "UnitA",
+        "UnitB"
+      ],
+      "implementationUses": [],
+      "includeFiles": [],
+      "allDependencies": [
+        "System.SysUtils",
+        "UnitA",
+        "UnitB"
+      ]
+    },
+    "cachedAt": "2026-02-04T19:17:56.2840482Z"
+  },
+  "/home/runner/work/PascalDepsAnalyzer/PascalDepsAnalyzer/TestDelphiProject/UnitB.pas": {
+    "filePath": "/home/runner/work/PascalDepsAnalyzer/PascalDepsAnalyzer/TestDelphiProject/UnitB.pas",
+    "fileHash": "AE85ACD643A4144F1150C5E114FB7403A2BABB69220B599D2880FCBDD42F8DB6",
+    "unit": {
+      "filePath": "/home/runner/work/PascalDepsAnalyzer/PascalDepsAnalyzer/TestDelphiProject/UnitB.pas",
+      "unitName": "UnitB",
+      "interfaceUses": [
+        "System.SysUtils",
+        "UnitC"
+      ],
+      "implementationUses": [],
+      "includeFiles": [],
+      "allDependencies": [
+        "System.SysUtils",
+        "UnitC"
+      ]
+    },
+    "cachedAt": "2026-02-04T19:17:56.2935904Z"
+  },
+  "/home/runner/work/PascalDepsAnalyzer/PascalDepsAnalyzer/TestDelphiProject/UnitA.pas": {
+    "filePath": "/home/runner/work/PascalDepsAnalyzer/PascalDepsAnalyzer/TestDelphiProject/UnitA.pas",
+    "fileHash": "1793A3DAEDC804BCA934E935212636588E6BD948B54C9846630C26BEC3F017A3",
+    "unit": {
+      "filePath": "/home/runner/work/PascalDepsAnalyzer/PascalDepsAnalyzer/TestDelphiProject/UnitA.pas",
+      "unitName": "UnitA",
+      "interfaceUses": [
+        "System.SysUtils",
+        "UnitB"
+      ],
+      "implementationUses": [],
+      "includeFiles": [
+        "constants.inc"
+      ],
+      "allDependencies": [
+        "System.SysUtils",
+        "UnitB"
+      ]
+    },
+    "cachedAt": "2026-02-04T19:17:56.2936082Z"
+  },
+  "/home/runner/work/PascalDepsAnalyzer/PascalDepsAnalyzer/TestDelphiProject/UnitC.pas": {
+    "filePath": "/home/runner/work/PascalDepsAnalyzer/PascalDepsAnalyzer/TestDelphiProject/UnitC.pas",
+    "fileHash": "730B2FCFFD95BA32449BEFCFEC980B124E6F723B011533047AF31DFEA53B49D5",
+    "unit": {
+      "filePath": "/home/runner/work/PascalDepsAnalyzer/PascalDepsAnalyzer/TestDelphiProject/UnitC.pas",
+      "unitName": "UnitC",
+      "interfaceUses": [
+        "System.SysUtils"
+      ],
+      "implementationUses": [],
+      "includeFiles": [],
+      "allDependencies": [
+        "System.SysUtils"
+      ]
+    },
+    "cachedAt": "2026-02-04T19:17:56.294101Z"
   }
 }
