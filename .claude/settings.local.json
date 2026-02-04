@@ -1,0 +1,43 @@
+{
+  "env": {
+    "ENABLE_TOOL_SEARCH": "auto:5",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "85"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(pnpm:*)",
+      "Bash(git:*)",
+      "Edit(src/**)",
+      "mcp__context7__*",
+      "Bash(pnpm import:*)",
+      "Bash(corepack enable:*)",
+      "Bash(corepack prepare:*)",
+      "Bash(where:*)",
+      "WebFetch(domain:en.angie.software)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(sort:*)",
+      "Bash(dir:*)",
+      "Bash(test:*)",
+      "Bash(dotnet:*)",
+      "Bash(./DelphiDepsAnalyzer/bin/Release/net10.0/win-x64/publish/DelphiDepsAnalyzer.exe:*)",
+      "Bash(if exist .deps-cache rmdir /s /q .deps-cache)",
+      "Bash(DelphiDepsAnalyzer/bin/Release/net10.0/win-x64/publish/DelphiDepsAnalyzer.exe:*)"
+    ],
+    "deny": [
+      "Read(.env*)",
+      "Read(**/credentials*)",
+      "Bash(rm -rf:*)"
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "context7"
+  ],
+  "language": "russian"
+}

@@ -1,0 +1,96 @@
+{
+  "project": {
+    "path": "D:\\Projects\\PascalDepsAnalyzer\\TestStructure\\ParentDir\\ChildDir\\ProjectDir\\TestProject2.dproj",
+    "mainSource": "D:\\Projects\\PascalDepsAnalyzer\\TestStructure\\ParentDir\\ChildDir\\ProjectDir\\TestProject2.dpr",
+    "searchPaths": [
+      "..\\TestStructure\\ParentDir\\ChildDir\\ProjectDir",
+      "D:\\Projects\\PascalDepsAnalyzer\\TestStructure\\ParentDir\\ChildDir\\ProjectDir\\"
+    ]
+  },
+  "units": [
+    {
+      "name": "TestProject2",
+      "path": "D:\\Projects\\PascalDepsAnalyzer\\TestStructure\\ParentDir\\ChildDir\\ProjectDir\\TestProject2.dpr",
+      "dependencies": {
+        "interface": [
+          "System.SysUtils",
+          "SharedUnit",
+          "DeepUnit"
+        ],
+        "implementation": []
+      },
+      "includes": []
+    },
+    {
+      "name": "SharedUnit",
+      "path": "D:\\Projects\\PascalDepsAnalyzer\\TestStructure\\ParentDir\\SharedUnit.pas",
+      "dependencies": {
+        "interface": [
+          "System.SysUtils"
+        ],
+        "implementation": []
+      },
+      "includes": []
+    },
+    {
+      "name": "DeepUnit",
+      "path": "D:\\Projects\\PascalDepsAnalyzer\\TestStructure\\ParentDir\\ChildDir\\ProjectDir\\SubDir1\\SubDir2\\SubDir3\\DeepUnit.pas",
+      "dependencies": {
+        "interface": [
+          "System.SysUtils"
+        ],
+        "implementation": []
+      },
+      "includes": []
+    }
+  ],
+  "includes": [],
+  "graph": {
+    "nodes": [
+      {
+        "unit": "TestProject2",
+        "path": "D:\\Projects\\PascalDepsAnalyzer\\TestStructure\\ParentDir\\ChildDir\\ProjectDir\\TestProject2.dpr"
+      },
+      {
+        "unit": "System.SysUtils",
+        "path": "[System]"
+      },
+      {
+        "unit": "SharedUnit",
+        "path": "D:\\Projects\\PascalDepsAnalyzer\\TestStructure\\ParentDir\\SharedUnit.pas"
+      },
+      {
+        "unit": "DeepUnit",
+        "path": "D:\\Projects\\PascalDepsAnalyzer\\TestStructure\\ParentDir\\ChildDir\\ProjectDir\\SubDir1\\SubDir2\\SubDir3\\DeepUnit.pas"
+      }
+    ],
+    "edges": [
+      {
+        "from": "TestProject2",
+        "to": "System.SysUtils"
+      },
+      {
+        "from": "TestProject2",
+        "to": "SharedUnit"
+      },
+      {
+        "from": "SharedUnit",
+        "to": "System.SysUtils"
+      },
+      {
+        "from": "TestProject2",
+        "to": "DeepUnit"
+      },
+      {
+        "from": "DeepUnit",
+        "to": "System.SysUtils"
+      }
+    ]
+  },
+  "statistics": {
+    "totalUnits": 3,
+    "totalIncludes": 0,
+    "totalDependencies": 5,
+    "analyzedAt": "2026-02-04T09:40:54.0225782Z"
+  }
+}

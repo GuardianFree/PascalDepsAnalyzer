@@ -1,0 +1,129 @@
+{
+  "project": {
+    "path": "D:\\Projects\\PascalDepsAnalyzer\\TestDelphiProject\\TestProject.dproj",
+    "mainSource": "D:\\Projects\\PascalDepsAnalyzer\\TestDelphiProject\\TestProject.dpr",
+    "searchPaths": [
+      "..\\TestDelphiProject",
+      "D:\\Projects\\PascalDepsAnalyzer\\TestDelphiProject\\"
+    ]
+  },
+  "units": [
+    {
+      "name": "TestProject",
+      "path": "D:\\Projects\\PascalDepsAnalyzer\\TestDelphiProject\\TestProject.dpr",
+      "dependencies": {
+        "interface": [
+          "System.SysUtils",
+          "UnitA",
+          "UnitB"
+        ],
+        "implementation": []
+      },
+      "includes": []
+    },
+    {
+      "name": "UnitA",
+      "path": "D:\\Projects\\PascalDepsAnalyzer\\TestDelphiProject\\UnitA.pas",
+      "dependencies": {
+        "interface": [
+          "System.SysUtils",
+          "UnitB"
+        ],
+        "implementation": []
+      },
+      "includes": [
+        "constants.inc"
+      ]
+    },
+    {
+      "name": "UnitB",
+      "path": "D:\\Projects\\PascalDepsAnalyzer\\TestDelphiProject\\UnitB.pas",
+      "dependencies": {
+        "interface": [
+          "System.SysUtils",
+          "UnitC"
+        ],
+        "implementation": []
+      },
+      "includes": []
+    },
+    {
+      "name": "UnitC",
+      "path": "D:\\Projects\\PascalDepsAnalyzer\\TestDelphiProject\\UnitC.pas",
+      "dependencies": {
+        "interface": [
+          "System.SysUtils"
+        ],
+        "implementation": []
+      },
+      "includes": []
+    }
+  ],
+  "includes": [
+    "D:\\Projects\\PascalDepsAnalyzer\\TestDelphiProject\\constants.inc"
+  ],
+  "graph": {
+    "nodes": [
+      {
+        "unit": "TestProject",
+        "path": "D:\\Projects\\PascalDepsAnalyzer\\TestDelphiProject\\TestProject.dpr"
+      },
+      {
+        "unit": "System.SysUtils",
+        "path": "[System]"
+      },
+      {
+        "unit": "UnitA",
+        "path": "D:\\Projects\\PascalDepsAnalyzer\\TestDelphiProject\\UnitA.pas"
+      },
+      {
+        "unit": "UnitB",
+        "path": "D:\\Projects\\PascalDepsAnalyzer\\TestDelphiProject\\UnitB.pas"
+      },
+      {
+        "unit": "UnitC",
+        "path": "D:\\Projects\\PascalDepsAnalyzer\\TestDelphiProject\\UnitC.pas"
+      }
+    ],
+    "edges": [
+      {
+        "from": "TestProject",
+        "to": "System.SysUtils"
+      },
+      {
+        "from": "TestProject",
+        "to": "UnitA"
+      },
+      {
+        "from": "TestProject",
+        "to": "UnitB"
+      },
+      {
+        "from": "UnitB",
+        "to": "System.SysUtils"
+      },
+      {
+        "from": "UnitA",
+        "to": "System.SysUtils"
+      },
+      {
+        "from": "UnitA",
+        "to": "UnitB"
+      },
+      {
+        "from": "UnitB",
+        "to": "UnitC"
+      },
+      {
+        "from": "UnitC",
+        "to": "System.SysUtils"
+      }
+    ]
+  },
+  "statistics": {
+    "totalUnits": 4,
+    "totalIncludes": 1,
+    "totalDependencies": 8,
+    "analyzedAt": "2026-02-04T15:18:48.9056186Z"
+  }
+}
