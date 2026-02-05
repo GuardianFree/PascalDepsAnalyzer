@@ -1,6 +1,5 @@
 {
   "prefixes": [
-    // Delphi RTL/VCL/FMX (стандартные библиотеки)
     "System.",
     "Vcl.",
     "FMX.",
@@ -15,8 +14,6 @@
     "Androidapi.",
     "iOSapi.",
     "Macapi.",
-
-    // Популярные сторонние библиотеки
     "DevExpress.",
     "dxCore.",
     "cxGrid.",
@@ -28,10 +25,51 @@
     "Jedi."
   ],
   "exactNames": [
-    // Точные имена юнитов (без префиксов)
     "madExcept",
     "EurekaLog",
     "JclBase",
-    "JclStrings"
+    "JclStrings",
+    "Windows",
+    "SysUtils",
+    "Classes",
+    "Graphics",
+    "Controls",
+    "Forms",
+    "Dialogs",
+    "StdCtrls",
+    "ExtCtrls",
+    "ComCtrls",
+    "Menus",
+    "ToolWin",
+    "ActnList",
+    "Clipbrd",
+    "Registry",
+    "ShellAPI",
+    "Math",
+    "DateUtils",
+    "StrUtils",
+    "Variants",
+    "TypInfo",
+    "jpeg",
+    "Grids",
+    "Buttons",
+    "Rtti",
+    "IOUtils",
+    "UITypes",
+    "TB2Item",
+    "TB2Dock",
+    "TB2Toolbar",
+    "TB2Popup",
+    "TB2MRU",
+    "SpTBXMDIMRU",
+    "SpTBXToolbar",
+    "SpTBXEditors",
+    "SpTBXControls",
+    "SpTBXSkins",
+    "ExceptionLog7",
+    "EEvents",
+    "EHeapException",
+    "EAccessViolation",
+    "ETypes"
   ]
 }
