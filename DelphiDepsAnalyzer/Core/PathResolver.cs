@@ -9,11 +9,13 @@ public class PathResolver
     private readonly string _projectRoot;
     private readonly HashSet<string> _allowedRoots;
     private readonly Dictionary<string, string?> _pathCache; // Кэш разрешенных путей
+    private readonly Dictionary<string, List<string>> _fileIndex; // Индекс всех .pas файлов (unit name -> list of paths)
 
     public PathResolver(List<string> searchPaths, string projectFilePath)
     {
         _searchPaths = searchPaths ?? new List<string>();
         _pathCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        _fileIndex = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
         // Определяем корень проекта (директория .dproj файла)
         _projectRoot = Path.GetDirectoryName(Path.GetFullPath(projectFilePath)) ?? string.Empty;
@@ -38,6 +40,133 @@ public class PathResolver
         {
             _allowedRoots.Add(Path.GetFullPath(searchPath));
         }
+
+        // Предварительная индексация всех .pas файлов для быстрого поиска
+        BuildFileIndex();
+    }
+
+    /// <summary>
+    /// Строит индекс всех .pas файлов в search paths для быстрого поиска
+    /// </summary>
+    private void BuildFileIndex()
+    {
+        var startTime = DateTime.Now;
+        var indexedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var searchPath in _searchPaths)
+        {
+            try
+            {
+                if (!Directory.Exists(searchPath) || !IsPathAllowed(searchPath))
+                {
+                    continue;
+                }
+
+                // Рекурсивно индексируем все .pas файлы (до 5 уровней)
+                IndexDirectory(searchPath, depth: 0, indexedPaths);
+            }
+            catch (Exception)
+            {
+                // Пропускаем недоступные пути
+            }
+        }
+
+        var elapsed = (DateTime.Now - startTime).TotalMilliseconds;
+        Console.WriteLine($"Проиндексировано файлов: {indexedPaths.Count} за {elapsed:F0}мс");
+    }
+
+    /// <summary>
+    /// Рекурсивно индексирует .pas файлы в директории
+    /// </summary>
+    private void IndexDirectory(string directory, int depth, HashSet<string> indexedPaths)
+    {
+        if (depth > 5 || !IsPathAllowed(directory))
+        {
+            return;
+        }
+
+        try
+        {
+            // Индексируем все .pas файлы в текущей директории
+            var enumerationOptions = new EnumerationOptions
+            {
+                RecurseSubdirectories = false,
+                MatchCasing = MatchCasing.CaseInsensitive,
+                AttributesToSkip = FileAttributes.System | FileAttributes.Hidden
+            };
+
+            foreach (var filePath in Directory.EnumerateFiles(directory, "*.pas", enumerationOptions))
+            {
+                var fullPath = Path.GetFullPath(filePath);
+
+                // Избегаем дублирования (если файл уже проиндексирован из другого search path)
+                if (indexedPaths.Contains(fullPath))
+                {
+                    continue;
+                }
+
+                indexedPaths.Add(fullPath);
+
+                var fileName = Path.GetFileNameWithoutExtension(filePath);
+
+                if (!_fileIndex.ContainsKey(fileName))
+                {
+                    _fileIndex[fileName] = new List<string>();
+                }
+
+                _fileIndex[fileName].Add(fullPath);
+
+                // Также индексируем qualified names (например, Vcl.Forms для Vcl\Forms.pas)
+                var relativePath = GetRelativePathFromSearchPath(fullPath);
+                if (!string.IsNullOrEmpty(relativePath))
+                {
+                    var qualifiedName = relativePath
+                        .Replace(Path.DirectorySeparatorChar, '.')
+                        .Replace(".pas", "", StringComparison.OrdinalIgnoreCase);
+
+                    if (!_fileIndex.ContainsKey(qualifiedName))
+                    {
+                        _fileIndex[qualifiedName] = new List<string>();
+                    }
+
+                    if (!_fileIndex[qualifiedName].Contains(fullPath))
+                    {
+                        _fileIndex[qualifiedName].Add(fullPath);
+                    }
+                }
+            }
+
+            // Рекурсивно обрабатываем поддиректории
+            foreach (var subDir in Directory.EnumerateDirectories(directory, "*", enumerationOptions))
+            {
+                IndexDirectory(subDir, depth + 1, indexedPaths);
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Пропускаем папки без доступа
+        }
+        catch (Exception)
+        {
+            // Пропускаем другие ошибки
+        }
+    }
+
+    /// <summary>
+    /// Получает относительный путь файла от search path
+    /// </summary>
+    private string GetRelativePathFromSearchPath(string fullPath)
+    {
+        foreach (var searchPath in _searchPaths)
+        {
+            var fullSearchPath = Path.GetFullPath(searchPath);
+            if (fullPath.StartsWith(fullSearchPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return fullPath.Substring(fullSearchPath.Length).TrimStart(Path.DirectorySeparatorChar);
+            }
+        }
+
+        return string.Empty;
     }
 
     /// <summary>
@@ -104,10 +233,18 @@ public class PathResolver
             return cachedPath;
         }
 
-        // Обрабатываем qualified unit names (например, Vcl.Forms -> Vcl\Forms.pas)
+        // Сначала проверяем в индексе (быстро)
+        if (_fileIndex.TryGetValue(unitName, out var indexedPaths) && indexedPaths.Count > 0)
+        {
+            // Если несколько вариантов, берём первый (можно улучшить приоритизацией)
+            var result = indexedPaths[0];
+            _pathCache[unitName] = result;
+            return result;
+        }
+
+        // Если не нашли в индексе, пробуем прямой поиск (fallback для динамически созданных файлов)
         var relativePath = unitName.Replace('.', Path.DirectorySeparatorChar);
 
-        // Ищем в каждом search path
         foreach (var searchPath in _searchPaths)
         {
             // Вариант 1: unitName.pas напрямую в search path
@@ -127,17 +264,9 @@ public class PathResolver
                 _pathCache[unitName] = result;
                 return result;
             }
-
-            // Вариант 3: рекурсивный поиск в подпапках search path (только вниз)
-            var foundPath = SearchInDirectory(searchPath, unitName, depth: 0);
-            if (foundPath != null)
-            {
-                _pathCache[unitName] = foundPath;
-                return foundPath;
-            }
         }
 
-        // Кэшируем null результат, чтобы не искать повторно
+        // Кэшируем null результат
         _pathCache[unitName] = null;
         return null;
     }
@@ -177,55 +306,6 @@ public class PathResolver
 
         return null;
     }
-
-    /// <summary>
-    /// Рекурсивный поиск файла в директории (только вниз, до 5 уровней)
-    /// </summary>
-    private string? SearchInDirectory(string directory, string unitName, int depth = 0)
-    {
-        if (depth > 5) // Ограничиваем глубину поиска для производительности
-        {
-            return null;
-        }
-
-        // Проверяем, что директория находится в разрешенных путях
-        if (!IsPathAllowed(directory))
-        {
-            return null;
-        }
-
-        try
-        {
-            // Проверяем в текущей директории
-            var fileName = $"{unitName}.pas";
-            var filePath = Path.Combine(directory, fileName);
-            if (File.Exists(filePath) && IsPathAllowed(filePath))
-            {
-                return Path.GetFullPath(filePath);
-            }
-
-            // Ищем в поддиректориях
-            foreach (var subDir in Directory.GetDirectories(directory))
-            {
-                var foundPath = SearchInDirectory(subDir, unitName, depth + 1);
-                if (foundPath != null)
-                {
-                    return foundPath;
-                }
-            }
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Пропускаем папки без доступа
-        }
-        catch (Exception)
-        {
-            // Пропускаем другие ошибки доступа к файловой системе
-        }
-
-        return null;
-    }
-
 
     /// <summary>
     /// Проверяет, является ли юнит системным (RTL/VCL/FMX)
