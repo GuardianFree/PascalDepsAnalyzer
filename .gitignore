@@ -19,8 +19,9 @@
 # Test results
 *.deps.json
 
-# User configuration for external units
-.external-units.json
+# User configuration for external units (in project directories - deprecated)
+# Now config is stored in exe directory
+*/.external-units.json
 
 # IDE files
 *.swp

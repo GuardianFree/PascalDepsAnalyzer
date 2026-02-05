@@ -22,46 +22,75 @@ public class ExternalUnitsConfig
     public List<string> ExactNames { get; set; } = new();
 
     /// <summary>
-    /// Загружает конфигурацию из файла или создаёт дефолтную
+    /// Загружает конфигурацию из файла или создаёт дефолтную.
+    /// Приоритет поиска:
+    /// 1. Директория исполняемого файла (единый конфиг для всех проектов)
+    /// 2. Директория проекта (для обратной совместимости)
     /// </summary>
     public static ExternalUnitsConfig Load(string projectDir)
     {
-        var configPath = Path.Combine(projectDir, ".external-units.json");
+        // Путь к директории исполняемого файла (работает для single-file приложений)
+        var exeDir = AppContext.BaseDirectory;
+        var exeConfigPath = Path.Combine(exeDir, ".external-units.json");
 
-        // Если файл существует, загружаем из него
-        if (File.Exists(configPath))
+        // Путь к конфигу в директории проекта (для обратной совместимости)
+        var projectConfigPath = Path.Combine(projectDir, ".external-units.json");
+
+        // Приоритет 1: Ищем в директории исполняемого файла
+        if (File.Exists(exeConfigPath))
         {
             try
             {
-                var json = File.ReadAllText(configPath);
+                var json = File.ReadAllText(exeConfigPath);
                 var config = JsonSerializer.Deserialize<ExternalUnitsConfig>(json);
                 if (config != null)
                 {
-                    Console.WriteLine($"Загружена конфигурация внешних юнитов: {configPath}");
+                    Console.WriteLine($"Загружена конфигурация внешних юнитов: {exeConfigPath}");
                     Console.WriteLine($"  Префиксов: {config.Prefixes.Count}, точных имён: {config.ExactNames.Count}");
                     return config;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ошибка загрузки конфигурации {configPath}: {ex.Message}");
-                Console.WriteLine("Используется дефолтная конфигурация.");
+                Console.WriteLine($"Ошибка загрузки конфигурации {exeConfigPath}: {ex.Message}");
+            }
+        }
+
+        // Приоритет 2: Ищем в директории проекта (обратная совместимость)
+        if (File.Exists(projectConfigPath))
+        {
+            try
+            {
+                var json = File.ReadAllText(projectConfigPath);
+                var config = JsonSerializer.Deserialize<ExternalUnitsConfig>(json);
+                if (config != null)
+                {
+                    Console.WriteLine($"Загружена конфигурация внешних юнитов: {projectConfigPath}");
+                    Console.WriteLine($"  Префиксов: {config.Prefixes.Count}, точных имён: {config.ExactNames.Count}");
+                    Console.WriteLine($"  [INFO] Рекомендуется переместить конфиг в директорию анализатора: {exeDir}");
+                    return config;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка загрузки конфигурации {projectConfigPath}: {ex.Message}");
             }
         }
 
         // Создаём дефолтную конфигурацию
         var defaultConfig = CreateDefault();
 
-        // Сохраняем для будущего использования
+        // Сохраняем в директории исполняемого файла (единый конфиг для всех проектов)
         try
         {
             var json = JsonSerializer.Serialize(defaultConfig, new JsonSerializerOptions
             {
                 WriteIndented = true
             });
-            File.WriteAllText(configPath, json);
-            Console.WriteLine($"Создан файл конфигурации: {configPath}");
+            File.WriteAllText(exeConfigPath, json);
+            Console.WriteLine($"Создан файл конфигурации: {exeConfigPath}");
             Console.WriteLine("Вы можете добавить в него префиксы и имена ваших внешних библиотек.");
+            Console.WriteLine("Этот конфиг будет использоваться для всех проектов.");
         }
         catch (Exception ex)
         {
