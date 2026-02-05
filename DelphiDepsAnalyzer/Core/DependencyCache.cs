@@ -12,11 +12,13 @@ public class DependencyCache
 {
     private readonly string _cacheDir;
     private readonly Dictionary<string, CachedUnit> _cache;
+    private readonly Dictionary<string, string> _hashCache; // Кэш хэшей в памяти для избежания повторного вычисления
 
     public DependencyCache(string projectDir)
     {
         _cacheDir = Path.Combine(projectDir, ".deps-cache");
         _cache = new Dictionary<string, CachedUnit>(StringComparer.OrdinalIgnoreCase);
+        _hashCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         LoadCache();
     }
 
@@ -32,14 +34,26 @@ public class DependencyCache
             return false;
         }
 
-        var fileHash = ComputeFileHash(filePath);
         var cacheKey = Path.GetFullPath(filePath);
 
         if (_cache.TryGetValue(cacheKey, out var cached))
         {
-            // Проверяем актуальность по хэшу
+            // Быстрая проверка: сначала время модификации + размер файла
+            var fileInfo = new FileInfo(filePath);
+            if (cached.LastModified == fileInfo.LastWriteTimeUtc && cached.FileSize == fileInfo.Length)
+            {
+                // Файл не изменился, используем кэш без вычисления хэша
+                unit = cached.Unit;
+                return true;
+            }
+
+            // Если время/размер изменились, делаем полную проверку по хэшу
+            var fileHash = GetOrComputeFileHash(filePath);
             if (cached.FileHash == fileHash)
             {
+                // Файл не изменился (совпадение по хэшу), обновляем метаданные
+                cached.LastModified = fileInfo.LastWriteTimeUtc;
+                cached.FileSize = fileInfo.Length;
                 unit = cached.Unit;
                 return true;
             }
@@ -58,16 +72,38 @@ public class DependencyCache
             return;
         }
 
-        var fileHash = ComputeFileHash(filePath);
         var cacheKey = Path.GetFullPath(filePath);
+        var fileInfo = new FileInfo(filePath);
+
+        // Используем уже вычисленный хэш из памяти или вычисляем новый
+        var fileHash = GetOrComputeFileHash(filePath);
 
         _cache[cacheKey] = new CachedUnit
         {
             FilePath = cacheKey,
             FileHash = fileHash,
+            LastModified = fileInfo.LastWriteTimeUtc,
+            FileSize = fileInfo.Length,
             Unit = unit,
             CachedAt = DateTime.UtcNow
         };
+    }
+
+    /// <summary>
+    /// Получает хэш из памяти или вычисляет его (с кэшированием)
+    /// </summary>
+    private string GetOrComputeFileHash(string filePath)
+    {
+        var cacheKey = Path.GetFullPath(filePath);
+
+        if (_hashCache.TryGetValue(cacheKey, out var cachedHash))
+        {
+            return cachedHash;
+        }
+
+        var hash = ComputeFileHash(filePath);
+        _hashCache[cacheKey] = hash;
+        return hash;
     }
 
     /// <summary>
@@ -160,6 +196,8 @@ public class CachedUnit
 {
     public string FilePath { get; set; } = string.Empty;
     public string FileHash { get; set; } = string.Empty;
+    public DateTime LastModified { get; set; } // Быстрая проверка изменений
+    public long FileSize { get; set; } // Быстрая проверка изменений
     public DelphiUnit Unit { get; set; } = new();
     public DateTime CachedAt { get; set; }
 }

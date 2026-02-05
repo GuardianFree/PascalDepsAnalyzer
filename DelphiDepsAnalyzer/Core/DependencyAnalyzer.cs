@@ -111,7 +111,6 @@ public class DependencyAnalyzer
             // Пропускаем системные юниты (RTL/VCL/FMX)
             if (_pathResolver.IsSystemUnit(dependency))
             {
-                Console.WriteLine($"  [SKIP] Системный юнит: {dependency}");
                 lock (_graphLock)
                 {
                     _project.DependencyGraph.AddNode(dependency, "[System]");
@@ -126,7 +125,6 @@ public class DependencyAnalyzer
                 _pathResolver.ResolveUnitPath(dependency));
             if (unitPath == null)
             {
-                Console.WriteLine($"  [WARNING] Юнит не найден: {dependency}");
                 lock (_graphLock)
                 {
                     _project.DependencyGraph.AddNode(dependency, "[Not Found]");
@@ -135,8 +133,6 @@ public class DependencyAnalyzer
                 _processedUnits.TryAdd(dependency, 0);
                 return;
             }
-
-            Console.WriteLine($"  [OK] Найден: {dependency} -> {unitPath}");
 
             // Помечаем как обработанный
             _processedUnits.TryAdd(dependency, 0);
@@ -148,17 +144,12 @@ public class DependencyAnalyzer
                 // Проверяем кэш
                 if (_cache != null && _cache.TryGetCachedUnit(unitPath, out var cachedUnit) && cachedUnit != null)
                 {
-                    Console.WriteLine($"  [CACHE HIT] Используем закэшированный: {dependency}");
                     _cache.RecordHit();
                     dependencyUnit = cachedUnit;
                 }
                 else
                 {
-                    if (_cache != null)
-                    {
-                        Console.WriteLine($"  [CACHE MISS] Парсим: {dependency}");
-                        _cache.RecordMiss();
-                    }
+                    _cache?.RecordMiss();
 
                     dependencyUnit = _metrics.MeasureOperation($"Parse Unit: {dependency}", () =>
                         _sourceParser.Parse(unitPath));

@@ -8,10 +8,12 @@ public class PathResolver
     private readonly List<string> _searchPaths;
     private readonly string _projectRoot;
     private readonly HashSet<string> _allowedRoots;
+    private readonly Dictionary<string, string?> _pathCache; // Кэш разрешенных путей
 
     public PathResolver(List<string> searchPaths, string projectFilePath)
     {
         _searchPaths = searchPaths ?? new List<string>();
+        _pathCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
         // Определяем корень проекта (директория .dproj файла)
         _projectRoot = Path.GetDirectoryName(Path.GetFullPath(projectFilePath)) ?? string.Empty;
@@ -96,6 +98,12 @@ public class PathResolver
     /// </summary>
     public string? ResolveUnitPath(string unitName)
     {
+        // Проверяем кэш
+        if (_pathCache.TryGetValue(unitName, out var cachedPath))
+        {
+            return cachedPath;
+        }
+
         // Обрабатываем qualified unit names (например, Vcl.Forms -> Vcl\Forms.pas)
         var relativePath = unitName.Replace('.', Path.DirectorySeparatorChar);
 
@@ -106,24 +114,31 @@ public class PathResolver
             var simplePath = Path.Combine(searchPath, $"{unitName}.pas");
             if (File.Exists(simplePath) && IsPathAllowed(simplePath))
             {
-                return Path.GetFullPath(simplePath);
+                var result = Path.GetFullPath(simplePath);
+                _pathCache[unitName] = result;
+                return result;
             }
 
             // Вариант 2: qualified name (например, Vcl\Forms.pas)
             var qualifiedPath = Path.Combine(searchPath, $"{relativePath}.pas");
             if (File.Exists(qualifiedPath) && IsPathAllowed(qualifiedPath))
             {
-                return Path.GetFullPath(qualifiedPath);
+                var result = Path.GetFullPath(qualifiedPath);
+                _pathCache[unitName] = result;
+                return result;
             }
 
             // Вариант 3: рекурсивный поиск в подпапках search path (только вниз)
             var foundPath = SearchInDirectory(searchPath, unitName, depth: 0);
             if (foundPath != null)
             {
+                _pathCache[unitName] = foundPath;
                 return foundPath;
             }
         }
 
+        // Кэшируем null результат, чтобы не искать повторно
+        _pathCache[unitName] = null;
         return null;
     }
 

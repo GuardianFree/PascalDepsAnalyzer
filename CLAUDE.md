@@ -41,6 +41,12 @@ dotnet run -- ../TestDelphiProject/TestProject.dproj --performance
 
 # Проверка созданного JSON
 cat ../TestDelphiProject/TestProject.deps.json
+
+# Тестирование команды list-files
+dotnet run -- list-files ../TestDelphiProject/TestProject.dproj
+
+# Сохранение списка файлов
+dotnet run -- list-files ../TestDelphiProject/TestProject.dproj --output files.txt
 ```
 
 ## Структура проекта
@@ -53,14 +59,16 @@ DelphiDepsAnalyzer/
 │   └── DependencyGraph.cs
 ├── Parsers/             # Парсеры файлов
 │   ├── DelphiProjectParser.cs
-│   └── DelphiSourceParser.cs
+│   └── DelphiSourceParser.cs    # Парсинг uses и условных директив
 ├── Core/                # Основная логика
 │   ├── PathResolver.cs           # Поиск файлов (5 уровней вверх/вниз)
 │   ├── DependencyAnalyzer.cs     # Граф зависимостей с параллелизмом
 │   ├── DependencyCache.cs        # Кэширование с SHA256
-│   └── PerformanceMetrics.cs     # Сбор метрик
+│   ├── PerformanceMetrics.cs     # Сбор метрик
+│   └── RepositoryRootFinder.cs   # Поиск корня репозитория (.git)
 ├── Output/              # Форматирование результатов
-│   └── JsonOutputFormatter.cs
+│   ├── JsonOutputFormatter.cs           # Генерация JSON для анализа
+│   └── RelativePathOutputFormatter.cs   # Вывод списка файлов (list-files)
 └── Program.cs           # CLI интерфейс
 
 TestDelphiProject/       # Тестовый проект Delphi
@@ -101,6 +109,12 @@ TestDelphiProject/       # Тестовый проект Delphi
 - ✅ Параллельный парсинг файлов (Parallel.ForEach, ConcurrentDictionary)
 - ✅ Incremental анализ (перепарсинг только измененных файлов)
 - ✅ Профилирование производительности (PerformanceMetrics, --performance флаг)
+- ✅ **Оптимизация кэша (v1.2.1):**
+  - Устранено двойное вычисление SHA256 (in-memory hash cache)
+  - Быстрая проверка по LastModified + FileSize перед SHA256
+  - Убрано избыточное логирование в параллельных потоках
+  - Кэширование путей в PathResolver
+  - **Результат: 2-й запуск на 20-50% быстрее первого**
 
 #### Phase 3 — Production
 - Поддержка changed files detection
@@ -172,21 +186,84 @@ uses
 
 ### Edge cases
 - Комментарии: `//`, `{ }`, `(* *)`
-- Условная компиляция: `{$IFDEF}`, `{$IFNDEF}`, `{$ENDIF}`
+- Условная компиляция: `{$IFDEF}`, `{$IFNDEF}`, `{$ENDIF}`, `{$ELSE}`, `{$ELSEIF}`, `{$IFOPT}`
+  - Директивы корректно удаляются из uses секций
+  - Переносы строк внутри uses обрабатываются как разделители
 - Строковые литералы с директивами внутри
 - Qualified unit names (например, `Vcl.Forms`)
 
+**Пример обработки условных директив:**
+```pascal
+uses
+  {$IFNDEF LINUX}
+    Vcl.Controls, Vcl.ActnList, Vcl.Forms, Vcl.Graphics, ShortCuts,
+  {$ENDIF}
+  {$IFDEF LINUX}
+    FMX.Controls, FMX.Forms,
+  {$ENDIF}
+  SysUtils;
+```
+Парсер извлечёт: `Vcl.Controls`, `Vcl.ActnList`, `Vcl.Forms`, `Vcl.Graphics`, `ShortCuts`, `FMX.Controls`, `FMX.Forms`, `SysUtils`
+
 ## Использование
+
+### Основная команда: анализ зависимостей
+
+Выполняет полный анализ проекта и генерирует JSON файл с графом зависимостей.
 
 ```bash
 # Базовый анализ проекта
 analyzer.exe path/to/project.dproj
+
+# С метриками производительности
+analyzer.exe path/to/project.dproj --performance
 
 # Вывод:
 # - Список всех .pas юнитов
 # - Список .inc файлов
 # - Граф транзитивных зависимостей
 # - JSON файл: project.deps.json
+```
+
+### Команда list-files: извлечение списка файлов
+
+Выполняет анализ зависимостей и выводит список всех обнаруженных файлов с путями относительно корня репозитория. Полезно для интеграции с CI/CD системами и для определения набора файлов, затрагиваемых изменениями в проекте.
+
+```bash
+# Вывод списка файлов в консоль
+analyzer.exe list-files path/to/project.dproj
+
+# Сохранение списка файлов в файл
+analyzer.exe list-files path/to/project.dproj --output files.txt
+
+# Указание корня репозитория вручную
+analyzer.exe list-files path/to/project.dproj --repo-root C:\Projects\MyMonorepo
+
+# Комбинация опций
+analyzer.exe list-files path/to/project.dproj --repo-root C:\Projects\MyMonorepo --output files.txt
+```
+
+**Опции команды list-files:**
+- `--repo-root <путь>` — явно указать корень репозитория. Если не указан, утилита автоматически ищет папку `.git` в родительских директориях.
+- `--output <путь>` — сохранить результат в файл. Если не указан, результат выводится в консоль.
+
+**Формат вывода:**
+Каждая строка содержит относительный путь к файлу от корня репозитория:
+```
+src/Units/UnitA.pas
+src/Units/UnitB.pas
+src/Common/constants.inc
+TestProject.dpr
+```
+
+**Использование в CI:**
+Команда полезна для определения списка файлов, которые нужно проверить в CI-pipeline:
+```bash
+# Получить список файлов проекта
+analyzer.exe list-files MyProject.dproj --output project-files.txt
+
+# Проверить, какие из изменённых файлов относятся к проекту
+git diff --name-only origin/main | grep -f project-files.txt
 ```
 
 ## Формат выходных данных

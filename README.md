@@ -48,6 +48,10 @@ dotnet build
 
 ## Использование
 
+Утилита поддерживает две команды:
+1. **Анализ зависимостей** (по умолчанию) — строит граф зависимостей и генерирует JSON
+2. **list-files** — извлекает список всех файлов проекта с относительными путями
+
 ### Базовый анализ проекта
 
 ```bash
@@ -62,6 +66,37 @@ dotnet run -- path/to/project.dproj --performance
 dotnet run -- path/to/project.dproj -p
 ```
 
+### Команда list-files
+
+Извлекает список всех файлов проекта (`.pas`, `.dpr`, `.inc`) с путями относительно корня репозитория. Полезно для CI/CD интеграции.
+
+```bash
+# Вывод списка файлов в консоль
+dotnet run -- list-files path/to/project.dproj
+
+# Сохранение списка в файл
+dotnet run -- list-files path/to/project.dproj --output files.txt
+
+# Указание корня репозитория вручную
+dotnet run -- list-files path/to/project.dproj --repo-root /path/to/monorepo
+
+# Комбинация опций
+dotnet run -- list-files path/to/project.dproj --repo-root /path/to/monorepo --output files.txt
+```
+
+**Опции команды list-files:**
+- `--repo-root <путь>` — корень репозитория (если не указан, ищется `.git` автоматически)
+- `--output <путь>` — файл для сохранения результата (если не указан, вывод в консоль)
+
+**Использование в CI:**
+```bash
+# Получить список файлов проекта
+./DelphiDepsAnalyzer.exe list-files MyProject.dproj --output project-files.txt
+
+# Проверить, какие изменённые файлы относятся к проекту
+git diff --name-only origin/main | grep -f project-files.txt
+```
+
 ### Примеры
 
 ```bash
@@ -70,6 +105,9 @@ dotnet run -- ../TestDelphiProject/TestProject.dproj
 
 # С детальными метриками
 dotnet run -- ../TestDelphiProject/TestProject.dproj --performance
+
+# Извлечение списка файлов
+dotnet run -- list-files ../TestDelphiProject/TestProject.dproj
 ```
 
 ### Вывод
@@ -137,16 +175,18 @@ Executable будет в `bin/Release/net10.0/win-x64/publish/DelphiDepsAnalyzer
 
 ### Parsers
 - `DelphiProjectParser` — парсит `.dproj` (XML)
-- `DelphiSourceParser` — парсит `.pas` и `.dpr` файлы
+- `DelphiSourceParser` — парсит `.pas` и `.dpr` файлы, обрабатывает условные директивы компиляции
 
 ### Core
 - `PathResolver` — разрешает пути к файлам юнитов (5 уровней поиска вверх/вниз)
 - `DependencyAnalyzer` — строит граф зависимостей с параллельной обработкой
 - `DependencyCache` — кэширование с SHA256 хэшированием
 - `PerformanceMetrics` — сбор метрик производительности
+- `RepositoryRootFinder` — определяет корень репозитория (поиск `.git`)
 
 ### Output
 - `JsonOutputFormatter` — генерирует JSON и выводит сводку
+- `RelativePathOutputFormatter` — форматирует список файлов для команды `list-files`
 
 ## Особенности парсинга
 
@@ -170,6 +210,24 @@ uses
 - `{ }` — блочные комментарии
 - `(* *)` — альтернативные блочные комментарии
 - `{$...}` — директивы компилятора (не удаляются)
+
+### Условные директивы компиляции
+Парсер обрабатывает условные директивы в uses секциях, удаляя их и объединяя все варианты:
+
+```pascal
+uses
+  {$IFNDEF LINUX}
+    Vcl.Controls, Vcl.ActnList, Vcl.Forms,
+  {$ENDIF}
+  {$IFDEF LINUX}
+    FMX.Controls, FMX.Forms,
+  {$ENDIF}
+  SysUtils;
+```
+
+Результат: `Vcl.Controls`, `Vcl.ActnList`, `Vcl.Forms`, `FMX.Controls`, `FMX.Forms`, `SysUtils`
+
+Поддерживаемые директивы: `{$IFDEF}`, `{$IFNDEF}`, `{$ENDIF}`, `{$ELSE}`, `{$ELSEIF}`, `{$IFOPT}`
 
 ## Особенности поиска файлов
 
@@ -197,8 +255,20 @@ MonoRepo/
 ## Известные ограничения
 
 1. Не поддерживаются макросы в путях (`$(Platform)`, `$(Config)`)
-2. Не поддерживается условная компиляция (`{$IFDEF}`)
-3. Не поддерживаются `.dpk` пакеты
+2. Не поддерживаются `.dpk` пакеты
+3. Условные директивы компиляции удаляются из uses секций (все варианты объединяются)
+
+**Примечание:** Условные директивы (`{$IFDEF}`, `{$IFNDEF}`, `{$ENDIF}`) в uses секциях обрабатываются путём удаления директив и объединения всех вариантов юнитов. Например:
+```pascal
+uses
+  {$IFDEF WINDOWS}
+    Vcl.Forms,
+  {$ELSE}
+    FMX.Forms,
+  {$ENDIF}
+  SysUtils;
+```
+Парсер извлечёт: `Vcl.Forms`, `FMX.Forms`, `SysUtils` (все варианты для всех платформ).
 
 Эти ограничения будут устранены в Phase 3.
 
@@ -279,6 +349,35 @@ Cache Hits:       4
 Cache Misses:     0
 Hit Rate:         100.0%
 ============================================================
+```
+
+### Команда list-files
+```
+Delphi Dependency Analyzer v1.2 (Phase 2)
+============================================================
+
+1. Парсинг проекта: TestProject.dproj
+
+2. Анализ зависимостей:
+  [CACHE HIT] Главный файл загружен из кэша
+  [OK] Найден: UnitA -> D:\Projects\TestDelphiProject\UnitA.pas
+  [CACHE HIT] Используем закэшированный: UnitA
+  [OK] Найден: UnitB -> D:\Projects\TestDelphiProject\UnitB.pas
+  [CACHE HIT] Используем закэшированный: UnitB
+
+3. Определение корня репозитория:
+Корень репозитория: D:\Projects
+
+4. Формирование списка файлов:
+
+TestDelphiProject/TestProject.dpr
+TestDelphiProject/UnitA.pas
+TestDelphiProject/UnitB.pas
+TestDelphiProject/UnitC.pas
+TestDelphiProject/constants.inc
+
+✓ Команда list-files успешно выполнена!
+Общее время: 0.05с
 ```
 
 ## Технологии
