@@ -108,12 +108,12 @@ public class DependencyAnalyzer
                 return; // В Parallel.ForEach используем return вместо continue
             }
 
-            // Пропускаем системные юниты (RTL/VCL/FMX)
-            if (_pathResolver.IsSystemUnit(dependency))
+            // Пропускаем внешние юниты (системные, библиотечные)
+            if (_pathResolver.IsExternalUnit(dependency))
             {
                 lock (_graphLock)
                 {
-                    _project.DependencyGraph.AddNode(dependency, "[System]");
+                    _project.DependencyGraph.AddNode(dependency, "[External]");
                     _project.DependencyGraph.AddEdge(unit.UnitName, dependency);
                 }
                 _processedUnits.TryAdd(dependency, 0);

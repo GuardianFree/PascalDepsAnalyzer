@@ -19,7 +19,11 @@
 # Test results
 *.deps.json
 
+# User configuration for external units
+.external-units.json
+
 # IDE files
 *.swp
 *~
 .DS_Store
+*/.vs/*

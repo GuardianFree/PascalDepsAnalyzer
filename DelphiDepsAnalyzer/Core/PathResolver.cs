@@ -10,6 +10,7 @@ public class PathResolver
     private readonly HashSet<string> _allowedRoots;
     private readonly Dictionary<string, string?> _pathCache; // Кэш разрешенных путей
     private readonly Dictionary<string, List<string>> _fileIndex; // Индекс всех .pas файлов (unit name -> list of paths)
+    private readonly ExternalUnitsConfig _externalUnitsConfig; // Конфигурация внешних юнитов
 
     public PathResolver(List<string> searchPaths, string projectFilePath)
     {
@@ -19,6 +20,9 @@ public class PathResolver
 
         // Определяем корень проекта (директория .dproj файла)
         _projectRoot = Path.GetDirectoryName(Path.GetFullPath(projectFilePath)) ?? string.Empty;
+
+        // Загружаем конфигурацию внешних юнитов
+        _externalUnitsConfig = ExternalUnitsConfig.Load(_projectRoot);
 
         // Находим корень репозитория (если есть .git)
         var repoRoot = FindRepositoryRoot(_projectRoot);
@@ -400,11 +404,10 @@ public class PathResolver
     }
 
     /// <summary>
-    /// Проверяет, является ли юнит системным (RTL/VCL/FMX)
+    /// Проверяет, является ли юнит внешним (системным, библиотечным)
     /// </summary>
-    public bool IsSystemUnit(string unitName)
+    public bool IsExternalUnit(string unitName)
     {
-        var systemPrefixes = new[] { "System.", "Vcl.", "FMX.", "Data.", "Xml.", "Soap.", "Web." };
-        return systemPrefixes.Any(prefix => unitName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        return _externalUnitsConfig.IsExternalUnit(unitName);
     }
 }

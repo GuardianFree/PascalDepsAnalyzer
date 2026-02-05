@@ -1,0 +1,37 @@
+{
+  "prefixes": [
+    // Delphi RTL/VCL/FMX (стандартные библиотеки)
+    "System.",
+    "Vcl.",
+    "FMX.",
+    "Data.",
+    "Xml.",
+    "Soap.",
+    "Web.",
+    "REST.",
+    "Datasnap.",
+    "WinApi.",
+    "Posix.",
+    "Androidapi.",
+    "iOSapi.",
+    "Macapi.",
+
+    // Популярные сторонние библиотеки
+    "DevExpress.",
+    "dxCore.",
+    "cxGrid.",
+    "Spring.",
+    "DUnitX.",
+    "Indy.",
+    "TMS.",
+    "FastReport.",
+    "Jedi."
+  ],
+  "exactNames": [
+    // Точные имена юнитов (без префиксов)
+    "madExcept",
+    "EurekaLog",
+    "JclBase",
+    "JclStrings"
+  ]
+}
