@@ -8,7 +8,7 @@ class Program
 {
     static int Main(string[] args)
     {
-        Console.WriteLine("Delphi Dependency Analyzer v1.2.2 (Phase 2 - Optimized)");
+        Console.WriteLine("Delphi Dependency Analyzer v1.2.3 (Phase 2 - Optimized)");
         Console.WriteLine(new string('=', 60));
 
         var metrics = new PerformanceMetrics();
