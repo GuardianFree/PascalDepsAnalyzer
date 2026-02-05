@@ -8,7 +8,7 @@ class Program
 {
     static int Main(string[] args)
     {
-        Console.WriteLine("Delphi Dependency Analyzer v1.2.4 (Phase 2 - Optimized)");
+        Console.WriteLine("Delphi Dependency Analyzer v1.3.0 (Phase 3 - CI Integration)");
         Console.WriteLine(new string('=', 60));
 
         var metrics = new PerformanceMetrics();
@@ -28,10 +28,15 @@ class Program
 
             // Проверяем, какая команда запрошена
             var command = filteredArgs[0].ToLowerInvariant();
-            
+
             if (command == "list-files")
             {
                 return ExecuteListFilesCommand(args, filteredArgs, metrics);
+            }
+
+            if (command == "check-changes")
+            {
+                return ExecuteCheckChangesCommand(args, filteredArgs, metrics);
             }
             
             // Если первый аргумент - это путь к файлу, выполняем стандартный анализ
@@ -118,23 +123,144 @@ class Program
         Console.WriteLine("\nИспользование:");
         Console.WriteLine("  DelphiDepsAnalyzer.exe <путь к .dproj файлу> [опции]");
         Console.WriteLine("  DelphiDepsAnalyzer.exe list-files <путь к .dproj файлу> [опции]");
+        Console.WriteLine("  DelphiDepsAnalyzer.exe check-changes <файл_списка_проектов> [опции]");
         Console.WriteLine("\nКоманды:");
         Console.WriteLine("  (по умолчанию)       Полный анализ зависимостей с выводом в JSON");
         Console.WriteLine("  list-files           Вывод списка файлов с путями относительно корня репозитория");
+        Console.WriteLine("  check-changes        Определить проекты, затронутые изменениями между коммитами");
         Console.WriteLine("\nПримеры:");
         Console.WriteLine("  DelphiDepsAnalyzer.exe C:\\Projects\\MyApp\\MyApp.dproj");
         Console.WriteLine("  DelphiDepsAnalyzer.exe C:\\Projects\\MyApp\\MyApp.dproj --performance");
         Console.WriteLine("  DelphiDepsAnalyzer.exe list-files C:\\Projects\\MyApp\\MyApp.dproj");
         Console.WriteLine("  DelphiDepsAnalyzer.exe list-files C:\\Projects\\MyApp\\MyApp.dproj --repo-root C:\\Projects");
+        Console.WriteLine("  DelphiDepsAnalyzer.exe check-changes Projects.txt --from abc123 --to def456 --output affected.txt");
         Console.WriteLine("\nОпции:");
         Console.WriteLine("  --help, -h           Показать это сообщение");
         Console.WriteLine("  --performance, -p    Показать детальные метрики производительности");
-        Console.WriteLine("  --repo-root <путь>   Указать корень репозитория (для команды list-files)");
-        Console.WriteLine("  --output <путь>      Сохранить результат в файл (для команды list-files)");
+        Console.WriteLine("  --repo-root <путь>   Указать корень репозитория");
+        Console.WriteLine("  --output <путь>      Сохранить результат в файл");
+        Console.WriteLine("  --from <commit>      Начальный коммит (для команды check-changes)");
+        Console.WriteLine("  --to <commit>        Конечный коммит (для команды check-changes)");
         Console.WriteLine("\nРезультат:");
         Console.WriteLine("  По умолчанию: создаётся файл <проект>.deps.json рядом с .dproj файлом");
         Console.WriteLine("  list-files: список файлов выводится в консоль или в указанный файл");
+        Console.WriteLine("  check-changes: список затронутых проектов сохраняется в указанный файл");
         Console.WriteLine("              Если --repo-root не указан, ищется папка .git автоматически");
+    }
+
+    static int ExecuteCheckChangesCommand(string[] args, string[] filteredArgs, PerformanceMetrics metrics)
+    {
+        var showPerformance = args.Contains("--performance") || args.Contains("-p");
+
+        // Нужен путь к файлу списка проектов после команды check-changes
+        if (filteredArgs.Length < 2)
+        {
+            Console.WriteLine("ОШИБКА: Укажите путь к файлу списка проектов после команды check-changes");
+            Console.WriteLine("Пример: DelphiDepsAnalyzer.exe check-changes Projects.txt --from abc123 --to def456 --output affected.txt");
+            return 1;
+        }
+
+        var projectListPath = filteredArgs[1];
+
+        if (!File.Exists(projectListPath))
+        {
+            Console.WriteLine($"ОШИБКА: Файл списка проектов не найден: {projectListPath}");
+            return 1;
+        }
+
+        // Парсим опции: --from, --to, --output, --repo-root
+        string? fromCommit = null;
+        string? toCommit = null;
+        string? outputPath = null;
+        string? repoRoot = null;
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--from" && i + 1 < args.Length)
+                fromCommit = args[i + 1];
+            else if (args[i] == "--to" && i + 1 < args.Length)
+                toCommit = args[i + 1];
+            else if (args[i] == "--output" && i + 1 < args.Length)
+                outputPath = args[i + 1];
+            else if (args[i] == "--repo-root" && i + 1 < args.Length)
+                repoRoot = args[i + 1];
+        }
+
+        // Валидация обязательных параметров
+        if (string.IsNullOrEmpty(fromCommit) || string.IsNullOrEmpty(toCommit) || string.IsNullOrEmpty(outputPath))
+        {
+            Console.WriteLine("ОШИБКА: Требуются параметры --from, --to, --output");
+            Console.WriteLine("Пример: DelphiDepsAnalyzer.exe check-changes Projects.txt --from abc123 --to def456 --output affected.txt");
+            return 1;
+        }
+
+        // Определение корня репозитория
+        var projectDir = Path.GetDirectoryName(Path.GetFullPath(projectListPath)) ?? Directory.GetCurrentDirectory();
+        var repositoryRoot = RepositoryRootFinder.GetRepositoryRoot(repoRoot, projectDir);
+        Console.WriteLine($"Корень репозитория: {repositoryRoot}");
+
+        // Получение измененных файлов через git
+        Console.WriteLine($"\n1. Получение изменений между {fromCommit}..{toCommit}:");
+        var gitAnalyzer = new GitChangesAnalyzer(repositoryRoot);
+        var changedFiles = metrics.MeasureOperation("Git Diff", () =>
+            gitAnalyzer.GetChangedFiles(fromCommit, toCommit));
+        Console.WriteLine($"   Изменено файлов: {changedFiles.Count}");
+
+        if (changedFiles.Count == 0)
+        {
+            Console.WriteLine("\n✓ Нет измененных файлов между указанными коммитами.");
+            File.WriteAllText(outputPath, string.Empty);
+            Console.WriteLine($"Создан пустой файл: {outputPath}");
+            return 0;
+        }
+
+        // Парсинг списка проектов
+        Console.WriteLine($"\n2. Парсинг списка проектов:");
+        var projectParser = new ProjectListParser();
+        var allProjects = metrics.MeasureOperation("Parse Project List", () =>
+            projectParser.Parse(projectListPath, repositoryRoot));
+        Console.WriteLine($"   Прочитано проектов: {allProjects.Count}");
+
+        // Инициализация единого кэша для всех проектов
+        var cache = new DependencyCache(repositoryRoot);
+
+        // Анализ затронутых проектов
+        Console.WriteLine($"\n3. Анализ затронутых проектов:");
+        var analyzer = new AffectedProjectsAnalyzer(metrics, cache);
+        var affectedProjects = metrics.MeasureOperation("Analyze Affected Projects", () =>
+            analyzer.AnalyzeAffectedProjects(allProjects, changedFiles, repositoryRoot));
+
+        // Сохранение кэша
+        metrics.MeasureOperation("Save Cache", () =>
+            cache.SaveCache());
+
+        // Сохранение результатов
+        var formatter = new CheckChangesOutputFormatter();
+        formatter.SaveAffectedProjects(affectedProjects, outputPath);
+        formatter.PrintSummary(allProjects.Count, affectedProjects.Count, affectedProjects);
+
+        metrics.Stop();
+
+        Console.WriteLine($"\n✓ Анализ успешно завершён!");
+        Console.WriteLine($"Общее время: {metrics.TotalTime.TotalSeconds:F2}с");
+
+        // Показываем детальные метрики если запрошено
+        if (showPerformance)
+        {
+            metrics.PrintReport();
+
+            // Статистика кэша
+            var cacheStats = cache.GetStatistics();
+            Console.WriteLine("\nСТАТИСТИКА КЭША");
+            Console.WriteLine(new string('=', 60));
+            Console.WriteLine($"Записей в кэше:   {cacheStats.TotalEntries}");
+            Console.WriteLine($"Cache Hits:       {cacheStats.CacheHits}");
+            Console.WriteLine($"Cache Misses:     {cacheStats.CacheMisses}");
+            Console.WriteLine($"Hit Rate:         {cacheStats.HitRate:F1}%");
+            Console.WriteLine(new string('=', 60));
+        }
+
+        return 0;
     }
 
     static int ExecuteListFilesCommand(string[] args, string[] filteredArgs, PerformanceMetrics metrics)
