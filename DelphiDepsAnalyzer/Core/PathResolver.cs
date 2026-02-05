@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace DelphiDepsAnalyzer.Core;
 
 /// <summary>
@@ -8,15 +10,16 @@ public class PathResolver
     private readonly List<string> _searchPaths;
     private readonly string _projectRoot;
     private readonly HashSet<string> _allowedRoots;
-    private readonly Dictionary<string, string?> _pathCache; // Кэш разрешенных путей
-    private readonly Dictionary<string, List<string>> _fileIndex; // Индекс всех .pas файлов (unit name -> list of paths)
+    private readonly ConcurrentDictionary<string, string?> _pathCache; // Кэш разрешенных путей
+    private readonly ConcurrentDictionary<string, List<string>> _fileIndex; // Индекс всех .pas файлов (unit name -> list of paths)
     private readonly ExternalUnitsConfig _externalUnitsConfig; // Конфигурация внешних юнитов
+    private readonly object _indexLock = new(); // Для синхронизации при добавлении в индекс
 
     public PathResolver(List<string> searchPaths, string projectFilePath)
     {
         _searchPaths = searchPaths ?? new List<string>();
-        _pathCache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        _fileIndex = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        _pathCache = new ConcurrentDictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        _fileIndex = new ConcurrentDictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
         // Определяем корень проекта (директория .dproj файла)
         _projectRoot = Path.GetDirectoryName(Path.GetFullPath(projectFilePath)) ?? string.Empty;
@@ -113,29 +116,32 @@ public class PathResolver
 
                 var fileName = Path.GetFileNameWithoutExtension(filePath);
 
-                if (!_fileIndex.ContainsKey(fileName))
+                // Потокобезопасное добавление в индекс
+                lock (_indexLock)
                 {
-                    _fileIndex[fileName] = new List<string>();
-                }
-
-                _fileIndex[fileName].Add(fullPath);
-
-                // Также индексируем qualified names (например, Vcl.Forms для Vcl\Forms.pas)
-                var relativePath = GetRelativePathFromSearchPath(fullPath);
-                if (!string.IsNullOrEmpty(relativePath))
-                {
-                    var qualifiedName = relativePath
-                        .Replace(Path.DirectorySeparatorChar, '.')
-                        .Replace(".pas", "", StringComparison.OrdinalIgnoreCase);
-
-                    if (!_fileIndex.ContainsKey(qualifiedName))
+                    if (!_fileIndex.ContainsKey(fileName))
                     {
-                        _fileIndex[qualifiedName] = new List<string>();
+                        _fileIndex[fileName] = new List<string>();
                     }
+                    _fileIndex[fileName].Add(fullPath);
 
-                    if (!_fileIndex[qualifiedName].Contains(fullPath))
+                    // Также индексируем qualified names (например, Vcl.Forms для Vcl\Forms.pas)
+                    var relativePath = GetRelativePathFromSearchPath(fullPath);
+                    if (!string.IsNullOrEmpty(relativePath))
                     {
-                        _fileIndex[qualifiedName].Add(fullPath);
+                        var qualifiedName = relativePath
+                            .Replace(Path.DirectorySeparatorChar, '.')
+                            .Replace(".pas", "", StringComparison.OrdinalIgnoreCase);
+
+                        if (!_fileIndex.ContainsKey(qualifiedName))
+                        {
+                            _fileIndex[qualifiedName] = new List<string>();
+                        }
+
+                        if (!_fileIndex[qualifiedName].Contains(fullPath))
+                        {
+                            _fileIndex[qualifiedName].Add(fullPath);
+                        }
                     }
                 }
             }
