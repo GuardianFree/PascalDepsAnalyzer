@@ -79,6 +79,17 @@ public class DelphiSourceParser
     }
 
     /// <summary>
+    /// Удаляет условные директивы компиляции из текста uses секции
+    /// </summary>
+    private string RemoveConditionalDirectives(string content)
+    {
+        // Удаляем условные директивы: {$IFDEF}, {$IFNDEF}, {$ENDIF}, {$ELSE}, {$IFOPT}, {$ELSEIF}, и т.д.
+        content = Regex.Replace(content, @"\{\s*\$(?:IF|IFDEF|IFNDEF|ELSE|ELSEIF|ENDIF|IFOPT)\s*[^}]*\}", "", RegexOptions.IgnoreCase);
+
+        return content;
+    }
+
+    /// <summary>
     /// Разделяет код на секции interface и implementation
     /// </summary>
     private (string interfaceSection, string implementationSection) SplitSections(string content)
@@ -110,10 +121,13 @@ public class DelphiSourceParser
         {
             var usesContent = match.Groups[1].Value;
 
-            // Разделяем по запятым
-            var unitNames = usesContent.Split(',')
+            // Удаляем условные директивы компиляции
+            usesContent = RemoveConditionalDirectives(usesContent);
+
+            // Разделяем по запятым и переносам строк (для поддержки условных директив)
+            var unitNames = usesContent.Split(new[] { ',', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(u => u.Trim())
-                .Where(u => !string.IsNullOrEmpty(u))
+                .Where(u => !string.IsNullOrWhiteSpace(u))
                 .Select(u => {
                     // Убираем "in 'path'" если есть
                     var inMatch = Regex.Match(u, @"^([\w.]+)\s+in\s+", RegexOptions.IgnoreCase);
@@ -123,7 +137,7 @@ public class DelphiSourceParser
                     }
                     return u;
                 })
-                .Where(u => !string.IsNullOrEmpty(u));
+                .Where(u => !string.IsNullOrWhiteSpace(u));
 
             units.AddRange(unitNames);
         }
