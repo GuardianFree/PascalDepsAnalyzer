@@ -69,9 +69,10 @@ public class DependencyAnalyzer
             _cache?.CacheUnit(_project.MainSourcePath, mainUnit);
         }
 
+        _project.Units.Add(mainUnit); // ConcurrentBag - потокобезопасен
+
         lock (_graphLock)
         {
-            _project.Units.Add(mainUnit);
             _project.DependencyGraph.AddNode(mainUnit.UnitName, mainUnit.FilePath);
         }
         _unitCache[mainUnit.UnitName] = mainUnit;
@@ -158,10 +159,7 @@ public class DependencyAnalyzer
                     _cache?.CacheUnit(unitPath, dependencyUnit);
                 }
 
-                lock (_graphLock)
-                {
-                    _project.Units.Add(dependencyUnit);
-                }
+                _project.Units.Add(dependencyUnit); // ConcurrentBag - потокобезопасен
                 _unitCache[dependencyUnit.UnitName] = dependencyUnit;
             }
             catch (Exception ex)
@@ -187,12 +185,15 @@ public class DependencyAnalyzer
     /// </summary>
     private void ProcessIncludes()
     {
+        // Используем ConcurrentDictionary для быстрой проверки дубликатов
+        var processedIncludes = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var unit in _project.Units)
         {
             foreach (var includePath in unit.IncludeFiles)
             {
                 var resolvedPath = _pathResolver.ResolveIncludePath(includePath, unit.FilePath);
-                if (resolvedPath != null && !_project.IncludeFiles.Contains(resolvedPath))
+                if (resolvedPath != null && processedIncludes.TryAdd(resolvedPath, 0))
                 {
                     _project.IncludeFiles.Add(resolvedPath);
                     Console.WriteLine($"  [INCLUDE] {includePath} -> {resolvedPath}");

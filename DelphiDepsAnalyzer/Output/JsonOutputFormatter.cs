@@ -77,7 +77,7 @@ public class JsonOutputFormatter
                 },
                 Includes = u.IncludeFiles
             }).ToList(),
-            Includes = project.IncludeFiles,
+            Includes = project.IncludeFiles.ToList(),
             Graph = new GraphInfo
             {
                 Nodes = project.DependencyGraph.Nodes.Select(n => new NodeInfo

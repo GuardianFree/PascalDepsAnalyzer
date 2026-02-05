@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace DelphiDepsAnalyzer.Models;
 
 /// <summary>
@@ -26,14 +28,14 @@ public class DelphiProject
     public List<string> IncludePaths { get; set; } = new();
 
     /// <summary>
-    /// Все юниты проекта
+    /// Все юниты проекта (потокобезопасная коллекция для параллельного анализа)
     /// </summary>
-    public List<DelphiUnit> Units { get; set; } = new();
+    public ConcurrentBag<DelphiUnit> Units { get; set; } = new();
 
     /// <summary>
-    /// Все include файлы проекта
+    /// Все include файлы проекта (потокобезопасная коллекция)
     /// </summary>
-    public List<string> IncludeFiles { get; set; } = new();
+    public ConcurrentBag<string> IncludeFiles { get; set; } = new();
 
     /// <summary>
     /// Граф зависимостей
