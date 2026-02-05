@@ -170,6 +170,89 @@ public class PathResolver
     }
 
     /// <summary>
+    /// Выбирает лучшее совпадение из нескольких файлов с одинаковым именем.
+    /// Приоритизация:
+    /// 1. Файлы из search paths, которые идут первыми в списке
+    /// 2. Файлы ближе к корню проекта
+    /// 3. Файлы с меньшей глубиной вложенности
+    /// </summary>
+    private string SelectBestMatch(List<string> candidates)
+    {
+        if (candidates.Count == 1)
+        {
+            return candidates[0];
+        }
+
+        // Приоритет 1: Сортируем по порядку search paths
+        var candidatesWithPriority = candidates
+            .Select(path => new
+            {
+                Path = path,
+                SearchPathIndex = GetSearchPathIndex(path),
+                DistanceToProject = GetDistanceToProject(path),
+                Depth = GetPathDepth(path)
+            })
+            .OrderBy(x => x.SearchPathIndex)           // Первый критерий: порядок в search paths
+            .ThenBy(x => x.DistanceToProject)          // Второй: близость к проекту
+            .ThenBy(x => x.Depth)                      // Третий: меньшая глубина вложенности
+            .ToList();
+
+        return candidatesWithPriority.First().Path;
+    }
+
+    /// <summary>
+    /// Получает индекс search path, которому принадлежит файл
+    /// </summary>
+    private int GetSearchPathIndex(string filePath)
+    {
+        for (int i = 0; i < _searchPaths.Count; i++)
+        {
+            var fullSearchPath = Path.GetFullPath(_searchPaths[i]);
+            if (filePath.StartsWith(fullSearchPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        // Если не найден ни в одном search path, даём низкий приоритет
+        return int.MaxValue;
+    }
+
+    /// <summary>
+    /// Вычисляет "расстояние" между файлом и корнем проекта (количество общих сегментов пути)
+    /// </summary>
+    private int GetDistanceToProject(string filePath)
+    {
+        var projectSegments = _projectRoot.Split(new[] { Path.DirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+        var fileSegments = filePath.Split(new[] { Path.DirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+
+        // Считаем количество общих сегментов с начала
+        int commonSegments = 0;
+        for (int i = 0; i < Math.Min(projectSegments.Length, fileSegments.Length); i++)
+        {
+            if (string.Equals(projectSegments[i], fileSegments[i], StringComparison.OrdinalIgnoreCase))
+            {
+                commonSegments++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // Чем больше общих сегментов, тем меньше "расстояние"
+        return Math.Abs(projectSegments.Length - commonSegments) + Math.Abs(fileSegments.Length - commonSegments);
+    }
+
+    /// <summary>
+    /// Получает глубину вложенности пути (количество сегментов)
+    /// </summary>
+    private int GetPathDepth(string filePath)
+    {
+        return filePath.Split(new[] { Path.DirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries).Length;
+    }
+
+    /// <summary>
     /// Находит корень git-репозитория, поднимаясь вверх по дереву директорий
     /// </summary>
     private string? FindRepositoryRoot(string startPath)
@@ -236,10 +319,19 @@ public class PathResolver
         // Сначала проверяем в индексе (быстро)
         if (_fileIndex.TryGetValue(unitName, out var indexedPaths) && indexedPaths.Count > 0)
         {
-            // Если несколько вариантов, берём первый (можно улучшить приоритизацией)
-            var result = indexedPaths[0];
-            _pathCache[unitName] = result;
-            return result;
+            // Если один вариант - возвращаем сразу
+            if (indexedPaths.Count == 1)
+            {
+                var result = indexedPaths[0];
+                _pathCache[unitName] = result;
+                return result;
+            }
+
+            // Если несколько вариантов (коллизия имён в монорепозитории),
+            // используем приоритизацию по search paths
+            var prioritizedResult = SelectBestMatch(indexedPaths);
+            _pathCache[unitName] = prioritizedResult;
+            return prioritizedResult;
         }
 
         // Если не нашли в индексе, пробуем прямой поиск (fallback для динамически созданных файлов)
