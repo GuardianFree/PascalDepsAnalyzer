@@ -54,11 +54,24 @@ class Program
                 return 1;
             }
 
+            // Парсим новые параметры условной компиляции
+            string configuration = "Debug";
+            string platform = "Win32";
+            bool ignoreConditionals = args.Contains("--ignore-conditionals");
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "--config" && i + 1 < args.Length)
+                    configuration = args[i + 1];
+                else if (args[i] == "--platform" && i + 1 < args.Length)
+                    platform = args[i + 1];
+            }
+
             // Парсинг проекта
             Console.WriteLine($"\n1. Парсинг проекта: {Path.GetFileName(dprojPath)}");
             var projectParser = new DelphiProjectParser();
             var project = metrics.MeasureOperation("Parse .dproj", () =>
-                projectParser.Parse(dprojPath));
+                projectParser.Parse(dprojPath, configuration, platform, !ignoreConditionals));
 
             // Инициализация кэша
             var projectDir = Path.GetDirectoryName(dprojPath) ?? Directory.GetCurrentDirectory();
@@ -135,12 +148,15 @@ class Program
         Console.WriteLine("  DelphiDepsAnalyzer.exe list-files C:\\Projects\\MyApp\\MyApp.dproj --repo-root C:\\Projects");
         Console.WriteLine("  DelphiDepsAnalyzer.exe check-changes Projects.txt --from abc123 --to def456 --output affected.txt");
         Console.WriteLine("\nОпции:");
-        Console.WriteLine("  --help, -h           Показать это сообщение");
-        Console.WriteLine("  --performance, -p    Показать детальные метрики производительности");
-        Console.WriteLine("  --repo-root <путь>   Указать корень репозитория");
-        Console.WriteLine("  --output <путь>      Сохранить результат в файл");
-        Console.WriteLine("  --from <commit>      Начальный коммит (для команды check-changes)");
-        Console.WriteLine("  --to <commit>        Конечный коммит (для команды check-changes)");
+        Console.WriteLine("  --help, -h               Показать это сообщение");
+        Console.WriteLine("  --performance, -p        Показать детальные метрики производительности");
+        Console.WriteLine("  --config <name>          Конфигурация сборки (Debug/Release, по умолчанию: Debug)");
+        Console.WriteLine("  --platform <name>        Платформа (Win32/Win64/OSX32/Android/iOS, по умолчанию: Win32)");
+        Console.WriteLine("  --ignore-conditionals    Игнорировать условные директивы (старое поведение)");
+        Console.WriteLine("  --repo-root <путь>       Указать корень репозитория");
+        Console.WriteLine("  --output <путь>          Сохранить результат в файл");
+        Console.WriteLine("  --from <commit>          Начальный коммит (для команды check-changes)");
+        Console.WriteLine("  --to <commit>            Конечный коммит (для команды check-changes)");
         Console.WriteLine("\nРезультат:");
         Console.WriteLine("  По умолчанию: создаётся файл <проект>.deps.json рядом с .dproj файлом");
         Console.WriteLine("  list-files: список файлов выводится в консоль или в указанный файл");
@@ -290,6 +306,9 @@ class Program
         // Парсим опции
         string? repoRoot = null;
         string? outputFile = null;
+        string configuration = "Debug";
+        string platform = "Win32";
+        bool ignoreConditionals = args.Contains("--ignore-conditionals");
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -301,13 +320,21 @@ class Program
             {
                 outputFile = args[i + 1];
             }
+            else if (args[i] == "--config" && i + 1 < args.Length)
+            {
+                configuration = args[i + 1];
+            }
+            else if (args[i] == "--platform" && i + 1 < args.Length)
+            {
+                platform = args[i + 1];
+            }
         }
 
         // Парсинг проекта
         Console.WriteLine($"\n1. Парсинг проекта: {Path.GetFileName(dprojPath)}");
         var projectParser = new DelphiProjectParser();
         var project = metrics.MeasureOperation("Parse .dproj", () =>
-            projectParser.Parse(dprojPath));
+            projectParser.Parse(dprojPath, configuration, platform, !ignoreConditionals));
 
         // Инициализация кэша
         var projectDir = Path.GetDirectoryName(dprojPath) ?? Directory.GetCurrentDirectory();

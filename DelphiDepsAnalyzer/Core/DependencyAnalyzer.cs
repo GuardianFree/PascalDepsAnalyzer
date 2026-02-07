@@ -17,8 +17,13 @@ public class DependencyAnalyzer
     private readonly PerformanceMetrics _metrics;
     private readonly DependencyCache? _cache;
     private readonly object _graphLock = new(); // Синхронизация для графа
+    private readonly ConditionalCompilationEvaluator? _evaluator;
+    private readonly IncludeFileProcessor? _includeProcessor;
+    private readonly bool _useConditionals;
+    private readonly HashSet<string>? _activeDefines;
 
-    public DependencyAnalyzer(DelphiProject project, PerformanceMetrics? metrics = null, DependencyCache? cache = null)
+    public DependencyAnalyzer(DelphiProject project, PerformanceMetrics? metrics = null,
+                             DependencyCache? cache = null, bool useConditionals = true)
     {
         _project = project;
         _sourceParser = new DelphiSourceParser();
@@ -27,6 +32,15 @@ public class DependencyAnalyzer
         _unitCache = new ConcurrentDictionary<string, DelphiUnit>(StringComparer.OrdinalIgnoreCase);
         _metrics = metrics ?? new PerformanceMetrics();
         _cache = cache;
+        _useConditionals = useConditionals;
+
+        // Инициализируем evaluator только если используем условную компиляцию
+        if (_useConditionals && project.CompilationDefines.Count > 0)
+        {
+            _evaluator = new ConditionalCompilationEvaluator(project.CompilationDefines);
+            _includeProcessor = new IncludeFileProcessor(_pathResolver, _evaluator);
+            _activeDefines = project.CompilationDefines;
+        }
     }
 
     /// <summary>
@@ -38,9 +52,26 @@ public class DependencyAnalyzer
         Console.WriteLine($"Главный файл: {_project.MainSourcePath}");
         Console.WriteLine($"Search paths: {_project.SearchPaths.Count}");
 
+        if (_useConditionals && _evaluator != null)
+        {
+            Console.WriteLine($"Условная компиляция: включена");
+            Console.WriteLine($"Конфигурация: {_project.Configuration}, Платформа: {_project.Platform}");
+            Console.WriteLine($"Активные символы: {string.Join(", ", _project.CompilationDefines)}");
+        }
+        else if (!_useConditionals)
+        {
+            Console.WriteLine($"Условная компиляция: отключена (--ignore-conditionals)");
+        }
+
         if (!File.Exists(_project.MainSourcePath))
         {
             throw new FileNotFoundException($"Главный файл проекта не найден: {_project.MainSourcePath}");
+        }
+
+        // Обрабатываем include файлы в главном .dpr файле ПЕРЕД его парсингом
+        if (_includeProcessor != null)
+        {
+            ProcessIncludesForFile(_project.MainSourcePath);
         }
 
         // Парсим главный файл
@@ -48,7 +79,7 @@ public class DependencyAnalyzer
         DelphiUnit mainUnit;
 
         // Проверяем кэш для главного файла
-        if (_cache != null && _cache.TryGetCachedUnit(_project.MainSourcePath, out var cachedMainUnit) && cachedMainUnit != null)
+        if (_cache != null && _cache.TryGetCachedUnit(_project.MainSourcePath, _activeDefines, out var cachedMainUnit) && cachedMainUnit != null)
         {
             Console.WriteLine("[CACHE HIT] Главный файл загружен из кэша");
             _cache.RecordHit();
@@ -63,10 +94,10 @@ public class DependencyAnalyzer
             }
 
             mainUnit = _metrics.MeasureOperation("Parse Main File", () =>
-                _sourceParser.Parse(_project.MainSourcePath));
+                _sourceParser.Parse(_project.MainSourcePath, _evaluator?.Clone()));
 
             // Сохраняем в кэш
-            _cache?.CacheUnit(_project.MainSourcePath, mainUnit);
+            _cache?.CacheUnit(_project.MainSourcePath, _activeDefines, mainUnit);
         }
 
         _project.Units.Add(mainUnit); // ConcurrentBag - потокобезопасен
@@ -143,7 +174,7 @@ public class DependencyAnalyzer
             try
             {
                 // Проверяем кэш
-                if (_cache != null && _cache.TryGetCachedUnit(unitPath, out var cachedUnit) && cachedUnit != null)
+                if (_cache != null && _cache.TryGetCachedUnit(unitPath, _activeDefines, out var cachedUnit) && cachedUnit != null)
                 {
                     _cache.RecordHit();
                     dependencyUnit = cachedUnit;
@@ -152,11 +183,17 @@ public class DependencyAnalyzer
                 {
                     _cache?.RecordMiss();
 
+                    // Обрабатываем include файлы ПЕРЕД парсингом
+                    if (_includeProcessor != null)
+                    {
+                        ProcessIncludesForFile(unitPath);
+                    }
+
                     dependencyUnit = _metrics.MeasureOperation($"Parse Unit: {dependency}", () =>
-                        _sourceParser.Parse(unitPath));
+                        _sourceParser.Parse(unitPath, _evaluator?.Clone()));
 
                     // Сохраняем в кэш
-                    _cache?.CacheUnit(unitPath, dependencyUnit);
+                    _cache?.CacheUnit(unitPath, _activeDefines, dependencyUnit);
                 }
 
                 _project.Units.Add(dependencyUnit); // ConcurrentBag - потокобезопасен
@@ -203,6 +240,33 @@ public class DependencyAnalyzer
                     Console.WriteLine($"  [WARNING] Include файл не найден: {includePath}");
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Предварительно обрабатывает include файлы для извлечения дефайнов
+    /// </summary>
+    private void ProcessIncludesForFile(string filePath)
+    {
+        if (_includeProcessor == null)
+            return;
+
+        try
+        {
+            var content = File.ReadAllText(filePath);
+            var includeMatches = System.Text.RegularExpressions.Regex.Matches(content,
+                @"\{\s*\$I(?:NCLUDE)?\s+['""]?([^}'""]+)['""]?\s*\}",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            foreach (System.Text.RegularExpressions.Match match in includeMatches)
+            {
+                var includePath = match.Groups[1].Value.Trim();
+                _includeProcessor.ProcessIncludeFile(includePath, filePath);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  [WARNING] Ошибка обработки includes для {filePath}: {ex.Message}");
         }
     }
 }

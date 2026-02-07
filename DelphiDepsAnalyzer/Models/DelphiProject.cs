@@ -41,4 +41,19 @@ public class DelphiProject
     /// Граф зависимостей
     /// </summary>
     public DependencyGraph DependencyGraph { get; set; } = new();
+
+    /// <summary>
+    /// Конфигурация проекта (Debug, Release)
+    /// </summary>
+    public string Configuration { get; set; } = "Debug";
+
+    /// <summary>
+    /// Целевая платформа (Win32, Win64, OSX32, Android, iOS)
+    /// </summary>
+    public string Platform { get; set; } = "Win32";
+
+    /// <summary>
+    /// Символы условной компиляции, определённые в проекте
+    /// </summary>
+    public HashSet<string> CompilationDefines { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

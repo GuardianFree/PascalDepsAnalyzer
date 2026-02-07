@@ -9,8 +9,10 @@ namespace DelphiDepsAnalyzer.Parsers;
 public class DelphiSourceParser
 {
     // Регулярные выражения для парсинга
+    // ВАЖНО: используем greedy +, чтобы захватить всю uses секцию до последней точки с запятой
+    // Это необходимо для корректной обработки условных директив внутри uses
     private static readonly Regex UsesRegex = new(
-        @"(?:^|\n)\s*uses\s+([\s\S]+?);",
+        @"(?:^|\n)\s*uses\s+([\s\S]+);",
         RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.Compiled
     );
 
@@ -22,7 +24,9 @@ public class DelphiSourceParser
     /// <summary>
     /// Парсит Delphi файл и извлекает зависимости
     /// </summary>
-    public DelphiUnit Parse(string filePath)
+    /// <param name="filePath">Путь к файлу</param>
+    /// <param name="evaluator">Evaluator для условных директив (null = старое поведение)</param>
+    public DelphiUnit Parse(string filePath, Core.ConditionalCompilationEvaluator? evaluator = null)
     {
         if (!File.Exists(filePath))
         {
@@ -40,19 +44,26 @@ public class DelphiSourceParser
         // Удаляем комментарии перед парсингом
         content = RemoveComments(content);
 
+        // Если есть evaluator, обрабатываем {$DEFINE}/{$UNDEF} директивы
+        // ВАЖНО: это должно быть ПЕРЕД разделением на секции
+        if (evaluator != null)
+        {
+            content = evaluator.ProcessDefineDirectives(content);
+        }
+
         // Разделяем на секции interface и implementation
         var (interfaceSection, implementationSection) = SplitSections(content);
 
         // Парсим uses из interface
         if (!string.IsNullOrEmpty(interfaceSection))
         {
-            unit.InterfaceUses = ParseUses(interfaceSection);
+            unit.InterfaceUses = ParseUses(interfaceSection, evaluator);
         }
 
         // Парсим uses из implementation
         if (!string.IsNullOrEmpty(implementationSection))
         {
-            unit.ImplementationUses = ParseUses(implementationSection);
+            unit.ImplementationUses = ParseUses(implementationSection, evaluator);
         }
 
         // Парсим include директивы
@@ -112,17 +123,27 @@ public class DelphiSourceParser
     /// <summary>
     /// Извлекает список юнитов из uses секции
     /// </summary>
-    private List<string> ParseUses(string section)
+    /// <param name="section">Секция кода (interface или implementation)</param>
+    /// <param name="evaluator">Evaluator для условных директив (null = старое поведение)</param>
+    private List<string> ParseUses(string section, Core.ConditionalCompilationEvaluator? evaluator)
     {
         var units = new List<string>();
         var matches = UsesRegex.Matches(section);
-
+        
         foreach (Match match in matches)
         {
             var usesContent = match.Groups[1].Value;
 
-            // Удаляем условные директивы компиляции
-            usesContent = RemoveConditionalDirectives(usesContent);
+            // Обрабатываем условные директивы (если есть evaluator)
+            if (evaluator != null)
+            {
+                usesContent = evaluator.ProcessConditionalDirectives(usesContent);
+            }
+            else
+            {
+                // Старое поведение: просто удаляем директивы
+                usesContent = RemoveConditionalDirectives(usesContent);
+            }
 
             // Разделяем по запятым и переносам строк (для поддержки условных директив)
             var unitNames = usesContent.Split(new[] { ',', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)

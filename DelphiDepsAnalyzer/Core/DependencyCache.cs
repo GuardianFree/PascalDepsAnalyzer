@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using DelphiDepsAnalyzer.Models;
 using DelphiDepsAnalyzer.Output;
@@ -23,9 +24,34 @@ public class DependencyCache
     }
 
     /// <summary>
+    /// Вычисляет стабильный хэш из набора defines (для ключа кэша)
+    /// </summary>
+    public static string ComputeDefinesHash(HashSet<string>? defines)
+    {
+        if (defines == null || defines.Count == 0)
+            return "NO_CONDITIONALS";
+
+        var sorted = defines.OrderBy(d => d, StringComparer.OrdinalIgnoreCase);
+        var combined = string.Join(";", sorted);
+
+        using var sha256 = SHA256.Create();
+        var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(combined));
+        return Convert.ToHexString(hashBytes);
+    }
+
+    /// <summary>
+    /// Формирует составной ключ кэша: путь + хэш defines
+    /// </summary>
+    private static string MakeCacheKey(string filePath, HashSet<string>? activeDefines)
+    {
+        var definesHash = ComputeDefinesHash(activeDefines);
+        return $"{Path.GetFullPath(filePath)}|{definesHash}";
+    }
+
+    /// <summary>
     /// Проверяет, есть ли актуальная запись в кэше
     /// </summary>
-    public bool TryGetCachedUnit(string filePath, out DelphiUnit? unit)
+    public bool TryGetCachedUnit(string filePath, HashSet<string>? activeDefines, out DelphiUnit? unit)
     {
         unit = null;
 
@@ -34,7 +60,7 @@ public class DependencyCache
             return false;
         }
 
-        var cacheKey = Path.GetFullPath(filePath);
+        var cacheKey = MakeCacheKey(filePath, activeDefines);
 
         if (_cache.TryGetValue(cacheKey, out var cached))
         {
@@ -65,14 +91,14 @@ public class DependencyCache
     /// <summary>
     /// Добавляет юнит в кэш
     /// </summary>
-    public void CacheUnit(string filePath, DelphiUnit unit)
+    public void CacheUnit(string filePath, HashSet<string>? activeDefines, DelphiUnit unit)
     {
         if (!File.Exists(filePath))
         {
             return;
         }
 
-        var cacheKey = Path.GetFullPath(filePath);
+        var cacheKey = MakeCacheKey(filePath, activeDefines);
         var fileInfo = new FileInfo(filePath);
 
         // Используем уже вычисленный хэш из памяти или вычисляем новый
@@ -80,8 +106,9 @@ public class DependencyCache
 
         _cache[cacheKey] = new CachedUnit
         {
-            FilePath = cacheKey,
+            FilePath = Path.GetFullPath(filePath),
             FileHash = fileHash,
+            DefinesHash = ComputeDefinesHash(activeDefines),
             LastModified = fileInfo.LastWriteTimeUtc,
             FileSize = fileInfo.Length,
             Unit = unit,
@@ -196,6 +223,7 @@ public class CachedUnit
 {
     public string FilePath { get; set; } = string.Empty;
     public string FileHash { get; set; } = string.Empty;
+    public string DefinesHash { get; set; } = string.Empty;
     public DateTime LastModified { get; set; } // Быстрая проверка изменений
     public long FileSize { get; set; } // Быстрая проверка изменений
     public DelphiUnit Unit { get; set; } = new();
