@@ -184,11 +184,13 @@ class Program
             return 1;
         }
 
-        // Парсим опции: --from, --to, --output, --repo-root
+        // Парсим опции: --from, --to, --output, --repo-root, --config, --platform
         string? fromCommit = null;
         string? toCommit = null;
         string? outputPath = null;
         string? repoRoot = null;
+        string configuration = "Debug";
+        string platform = "Win32";
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -200,6 +202,10 @@ class Program
                 outputPath = args[i + 1];
             else if (args[i] == "--repo-root" && i + 1 < args.Length)
                 repoRoot = args[i + 1];
+            else if (args[i] == "--config" && i + 1 < args.Length)
+                configuration = args[i + 1];
+            else if (args[i] == "--platform" && i + 1 < args.Length)
+                platform = args[i + 1];
         }
 
         // Валидация обязательных параметров
@@ -242,7 +248,7 @@ class Program
 
         // Анализ затронутых проектов
         Console.WriteLine($"\n3. Анализ затронутых проектов:");
-        var analyzer = new AffectedProjectsAnalyzer(metrics, cache);
+        var analyzer = new AffectedProjectsAnalyzer(metrics, cache, configuration, platform);
         var affectedProjects = metrics.MeasureOperation("Analyze Affected Projects", () =>
             analyzer.AnalyzeAffectedProjects(allProjects, changedFiles, repositoryRoot));
 

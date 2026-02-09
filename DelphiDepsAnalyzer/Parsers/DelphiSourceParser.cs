@@ -9,10 +9,12 @@ namespace DelphiDepsAnalyzer.Parsers;
 public class DelphiSourceParser
 {
     // Регулярные выражения для парсинга
-    // ВАЖНО: используем greedy +, чтобы захватить всю uses секцию до последней точки с запятой
-    // Это необходимо для корректной обработки условных директив внутри uses
+    // ВАЖНО: используем lazy +? чтобы захватить uses секцию до ПЕРВОЙ точки с запятой.
+    // В uses секции юниты разделяются запятыми, и только последний заканчивается ";".
+    // Greedy "+" захватывал бы всё до последней ";" в секции, включая type/const/var,
+    // что приводило к ложным warnings о глубокой вложенности условных директив.
     private static readonly Regex UsesRegex = new(
-        @"(?:^|\n)\s*uses\s+([\s\S]+);",
+        @"(?:^|\n)\s*uses\s+([\s\S]+?);",
         RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.Compiled
     );
 
@@ -94,8 +96,8 @@ public class DelphiSourceParser
     /// </summary>
     private string RemoveConditionalDirectives(string content)
     {
-        // Удаляем условные директивы: {$IFDEF}, {$IFNDEF}, {$ENDIF}, {$ELSE}, {$IFOPT}, {$ELSEIF}, и т.д.
-        content = Regex.Replace(content, @"\{\s*\$(?:IF|IFDEF|IFNDEF|ELSE|ELSEIF|ENDIF|IFOPT)\s*[^}]*\}", "", RegexOptions.IgnoreCase);
+        // Удаляем условные директивы: {$IFDEF}, {$IFNDEF}, {$ENDIF}, {$IFEND}, {$ELSE}, {$IFOPT}, {$ELSEIF}, и т.д.
+        content = Regex.Replace(content, @"\{\s*\$(?:IFDEF|IFNDEF|IFEND|IFOPT|IF|ELSE|ELSEIF|ENDIF)\b[^}]*\}", "", RegexOptions.IgnoreCase);
 
         return content;
     }

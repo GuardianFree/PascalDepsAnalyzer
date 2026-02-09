@@ -10,7 +10,7 @@ namespace DelphiDepsAnalyzer.Core;
 public class ConditionalCompilationEvaluator
 {
     private readonly HashSet<string> _defines;
-    private const int MaxNestingLevel = 20;
+    private const int MaxNestingLevel = 200;
 
     public ConditionalCompilationEvaluator(HashSet<string> defines)
     {
@@ -56,7 +56,7 @@ public class ConditionalCompilationEvaluator
     /// </summary>
     private static string NormalizeDirectives(string content)
     {
-        return Regex.Replace(content, @"(\{\s*\$(?:IF|IFDEF|IFNDEF|ELSE|ELSEIF|ENDIF|IFOPT|DEFINE|UNDEF)\b[^}]*\})", "\n$1\n", RegexOptions.IgnoreCase);
+        return Regex.Replace(content, @"(\{\s*\$(?:IFDEF|IFNDEF|IFEND|IFOPT|IF|ELSE|ELSEIF|ENDIF|DEFINE|UNDEF)\b[^}]*\})", "\n$1\n", RegexOptions.IgnoreCase);
     }
 
     /// <summary>
@@ -71,6 +71,7 @@ public class ConditionalCompilationEvaluator
         var stack = new Stack<ConditionalBlock>();
         var currentBlock = new ConditionalBlock { IsActive = true, ParentActive = true };
         var nestingLevel = 0;
+        var nestingWarningShown = false;
 
         foreach (var line in lines)
         {
@@ -83,8 +84,11 @@ public class ConditionalCompilationEvaluator
                 nestingLevel++;
                 if (nestingLevel > MaxNestingLevel)
                 {
-                    Console.WriteLine($"  [WARNING] Слишком глубокая вложенность условных директив (>{MaxNestingLevel})");
-                    continue;
+                    if (!nestingWarningShown)
+                    {
+                        Console.WriteLine($"  [WARNING] Слишком глубокая вложенность условных директив (>{MaxNestingLevel})");
+                        nestingWarningShown = true;
+                    }
                 }
 
                 var symbol = ifdefMatch.Groups[1].Value;
@@ -108,8 +112,11 @@ public class ConditionalCompilationEvaluator
                 nestingLevel++;
                 if (nestingLevel > MaxNestingLevel)
                 {
-                    Console.WriteLine($"  [WARNING] Слишком глубокая вложенность условных директив (>{MaxNestingLevel})");
-                    continue;
+                    if (!nestingWarningShown)
+                    {
+                        Console.WriteLine($"  [WARNING] Слишком глубокая вложенность условных директив (>{MaxNestingLevel})");
+                        nestingWarningShown = true;
+                    }
                 }
 
                 var symbol = ifndefMatch.Groups[1].Value;
@@ -126,6 +133,18 @@ public class ConditionalCompilationEvaluator
                 continue;
             }
 
+            // {$IFEND} - альтернативная закрывающая директива для {$IF} (аналог {$ENDIF})
+            // ВАЖНО: проверяем ПЕРЕД {$IF}, иначе {$IFEND} матчится как {$IF END}
+            if (Regex.IsMatch(trimmed, @"^\{\s*\$IFEND\b[^}]*\}", RegexOptions.IgnoreCase))
+            {
+                nestingLevel--;
+                if (stack.Count > 0)
+                {
+                    currentBlock = stack.Pop();
+                }
+                continue;
+            }
+
             // {$IF expression} - поддержка сложных выражений
             var ifMatch = Regex.Match(trimmed, @"^\{\s*\$IF\s+(.+?)\s*\}", RegexOptions.IgnoreCase);
             if (ifMatch.Success)
@@ -133,8 +152,11 @@ public class ConditionalCompilationEvaluator
                 nestingLevel++;
                 if (nestingLevel > MaxNestingLevel)
                 {
-                    Console.WriteLine($"  [WARNING] Слишком глубокая вложенность условных директив (>{MaxNestingLevel})");
-                    continue;
+                    if (!nestingWarningShown)
+                    {
+                        Console.WriteLine($"  [WARNING] Слишком глубокая вложенность условных директив (>{MaxNestingLevel})");
+                        nestingWarningShown = true;
+                    }
                 }
 
                 var expression = ifMatch.Groups[1].Value;
@@ -190,8 +212,8 @@ public class ConditionalCompilationEvaluator
                 continue;
             }
 
-            // {$ENDIF}
-            if (Regex.IsMatch(trimmed, @"^\{\s*\$ENDIF\s*\}", RegexOptions.IgnoreCase))
+            // {$ENDIF} или {$ENDIF SYMBOL} — допускаем опциональный комментарий/символ после ENDIF
+            if (Regex.IsMatch(trimmed, @"^\{\s*\$ENDIF\b[^}]*\}", RegexOptions.IgnoreCase))
             {
                 nestingLevel--;
                 if (stack.Count > 0)
@@ -296,6 +318,17 @@ public class ConditionalCompilationEvaluator
                 continue;
             }
 
+            // {$IFEND} - альтернативная закрывающая директива для {$IF}
+            // ВАЖНО: проверяем ПЕРЕД {$IF}, иначе {$IFEND} матчится как {$IF END}
+            if (Regex.IsMatch(trimmed, @"^\{\s*\$IFEND\b[^}]*\}", RegexOptions.IgnoreCase))
+            {
+                if (stack.Count > 0)
+                    currentBlock = stack.Pop();
+                // ОСТАВЛЯЕМ директиву в коде (как ENDIF)!
+                result.AppendLine(line);
+                continue;
+            }
+
             // {$IF expression}
             var ifMatch = Regex.Match(trimmed, @"^\{\s*\$IF\s+(.+?)\s*\}", RegexOptions.IgnoreCase);
             if (ifMatch.Success)
@@ -352,8 +385,8 @@ public class ConditionalCompilationEvaluator
                 continue;
             }
 
-            // {$ENDIF}
-            if (Regex.IsMatch(trimmed, @"^\{\s*\$ENDIF\s*\}", RegexOptions.IgnoreCase))
+            // {$ENDIF} или {$ENDIF SYMBOL}
+            if (Regex.IsMatch(trimmed, @"^\{\s*\$ENDIF\b[^}]*\}", RegexOptions.IgnoreCase))
             {
                 if (stack.Count > 0)
                     currentBlock = stack.Pop();

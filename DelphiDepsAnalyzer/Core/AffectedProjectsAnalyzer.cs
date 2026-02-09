@@ -11,11 +11,16 @@ public class AffectedProjectsAnalyzer
 {
     private readonly PerformanceMetrics _metrics;
     private readonly DependencyCache _cache;
+    private readonly string _configuration;
+    private readonly string _platform;
 
-    public AffectedProjectsAnalyzer(PerformanceMetrics metrics, DependencyCache cache)
+    public AffectedProjectsAnalyzer(PerformanceMetrics metrics, DependencyCache cache,
+                                     string configuration = "Debug", string platform = "Win32")
     {
         _metrics = metrics;
         _cache = cache;
+        _configuration = configuration;
+        _platform = platform;
     }
 
     /// <summary>
@@ -38,6 +43,7 @@ public class AffectedProjectsAnalyzer
             {
                 var isAffected = IsProjectAffected(
                     project.ProjectPath,
+                    project.Directives,
                     changedFiles,
                     repoRoot,
                     out var matchedFile);
@@ -72,6 +78,7 @@ public class AffectedProjectsAnalyzer
     /// </summary>
     private bool IsProjectAffected(
         string projectPath,
+        string? additionalDirectives,
         HashSet<string> changedFiles,
         string repoRoot,
         out string? firstMatchedFile)
@@ -93,11 +100,24 @@ public class AffectedProjectsAnalyzer
         try
         {
             project = _metrics.MeasureOperation($"Parse {Path.GetFileName(projectPath)}", () =>
-                projectParser.Parse(projectPath));
+                projectParser.Parse(projectPath, _configuration, _platform));
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException($"Не удалось распарсить проект: {ex.Message}", ex);
+        }
+
+        // 2.1. Добавляем директивы из файла списка проектов (активны в любой конфигурации)
+        if (!string.IsNullOrEmpty(additionalDirectives))
+        {
+            foreach (var define in additionalDirectives.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var trimmed = define.Trim();
+                if (!string.IsNullOrEmpty(trimmed))
+                {
+                    project.CompilationDefines.Add(trimmed);
+                }
+            }
         }
 
         // 3. Анализируем зависимости
