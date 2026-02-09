@@ -37,7 +37,8 @@ public class DependencyAnalyzer
         // Инициализируем evaluator только если используем условную компиляцию
         if (_useConditionals && project.CompilationDefines.Count > 0)
         {
-            _evaluator = new ConditionalCompilationEvaluator(project.CompilationDefines);
+            _evaluator = new ConditionalCompilationEvaluator(project.CompilationDefines,
+                project.CompilerVariables.Count > 0 ? project.CompilerVariables : null);
             _includeProcessor = new IncludeFileProcessor(_pathResolver, _evaluator);
             _activeDefines = project.CompilationDefines;
         }

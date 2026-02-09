@@ -56,4 +56,10 @@ public class DelphiProject
     /// Символы условной компиляции, определённые в проекте
     /// </summary>
     public HashSet<string> CompilationDefines { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Предопределённые переменные компилятора (CompilerVersion, RTLVersion и т.д.)
+    /// Используются для вычисления выражений вида {$IF CompilerVersion >= 31}
+    /// </summary>
+    public Dictionary<string, double> CompilerVariables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

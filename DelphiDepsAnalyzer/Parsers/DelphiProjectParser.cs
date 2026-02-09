@@ -71,7 +71,7 @@ public class DelphiProjectParser
         // Парсинг дефайнов (если требуется)
         if (parseConditionals)
         {
-            project.CompilationDefines = ParseCompilationDefines(doc, configuration, platform);
+            project.CompilationDefines = ParseCompilationDefines(doc, configuration, platform, project);
         }
 
         return project;
@@ -128,7 +128,7 @@ public class DelphiProjectParser
     /// - Наследование через CfgParent/Base
     /// - Макросы $(Config), $(Platform)
     /// </summary>
-    private HashSet<string> ParseCompilationDefines(XDocument doc, string configuration, string platform)
+    private HashSet<string> ParseCompilationDefines(XDocument doc, string configuration, string platform, DelphiProject project)
     {
         var defines = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var ns = doc.Root?.Name.Namespace ?? XNamespace.None;
@@ -161,6 +161,9 @@ public class DelphiProjectParser
 
         // 3. Добавляем предопределённые символы для платформы
         AddPlatformDefines(defines, platform);
+
+        // 4. Добавляем предопределённые переменные компилятора
+        AddCompilerVariables(project);
 
         return defines;
     }
@@ -314,5 +317,18 @@ public class DelphiProjectParser
 
         // Универсальные предопределённые символы
         defines.Add("CONDITIONALEXPRESSIONS");
+
+        // Версионный символ Delphi 12 Athens
+        defines.Add("VER360");
+    }
+
+    /// <summary>
+    /// Добавляет предопределённые переменные компилятора Delphi 12 Athens
+    /// Используются для вычисления выражений вида {$IF CompilerVersion >= 31}
+    /// </summary>
+    private void AddCompilerVariables(DelphiProject project)
+    {
+        project.CompilerVariables["CompilerVersion"] = 36.0;
+        project.CompilerVariables["RTLVersion"] = 36.0;
     }
 }

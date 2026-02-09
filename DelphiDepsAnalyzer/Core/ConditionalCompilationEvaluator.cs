@@ -10,11 +10,15 @@ namespace DelphiDepsAnalyzer.Core;
 public class ConditionalCompilationEvaluator
 {
     private readonly HashSet<string> _defines;
+    private readonly Dictionary<string, double> _variables;
     private const int MaxNestingLevel = 200;
 
-    public ConditionalCompilationEvaluator(HashSet<string> defines)
+    public ConditionalCompilationEvaluator(HashSet<string> defines, Dictionary<string, double>? variables = null)
     {
         _defines = new HashSet<string>(defines, StringComparer.OrdinalIgnoreCase);
+        _variables = variables != null
+            ? new Dictionary<string, double>(variables, StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -22,7 +26,7 @@ public class ConditionalCompilationEvaluator
     /// </summary>
     public ConditionalCompilationEvaluator Clone()
     {
-        return new ConditionalCompilationEvaluator(_defines);
+        return new ConditionalCompilationEvaluator(_defines, _variables);
     }
 
     /// <summary>
@@ -504,8 +508,80 @@ public class ConditionalCompilationEvaluator
         if (expression.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
             return false;
 
+        // Обработка числовых сравнений: CompilerVersion >= 31, RTLVersion >= 14.2
+        var comparisonResult = EvaluateComparison(expression);
+        if (comparisonResult.HasValue)
+            return comparisonResult.Value;
+
         // Неизвестное выражение - предупреждение
         Console.WriteLine($"  [WARNING] Не удалось распарсить выражение: {expression}");
+        return false;
+    }
+
+    /// <summary>
+    /// Вычисляет выражение сравнения вида "CompilerVersion >= 31" или "RTLVersion >= 14.2"
+    /// Возвращает null если выражение не является сравнением
+    /// </summary>
+    private bool? EvaluateComparison(string expression)
+    {
+        // Ищем оператор сравнения (>=, <=, <>, >, <, =)
+        // Порядок важен: сначала двухсимвольные, потом односимвольные
+        string[] operators = [">=", "<=", "<>", ">", "<", "="];
+        string? foundOp = null;
+        int opIndex = -1;
+
+        foreach (var op in operators)
+        {
+            var idx = expression.IndexOf(op, StringComparison.Ordinal);
+            if (idx > 0)
+            {
+                foundOp = op;
+                opIndex = idx;
+                break;
+            }
+        }
+
+        if (foundOp == null)
+            return null;
+
+        var leftStr = expression.Substring(0, opIndex).Trim();
+        var rightStr = expression.Substring(opIndex + foundOp.Length).Trim();
+
+        // Разрешаем значения: переменная или числовой литерал
+        if (!TryResolveNumericValue(leftStr, out var leftVal) || !TryResolveNumericValue(rightStr, out var rightVal))
+            return null;
+
+        return foundOp switch
+        {
+            ">=" => leftVal >= rightVal,
+            "<=" => leftVal <= rightVal,
+            "<>" => Math.Abs(leftVal - rightVal) > 0.001,
+            ">" => leftVal > rightVal,
+            "<" => leftVal < rightVal,
+            "=" => Math.Abs(leftVal - rightVal) < 0.001,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    /// Разрешает имя переменной или числовой литерал в double значение
+    /// </summary>
+    private bool TryResolveNumericValue(string token, out double value)
+    {
+        // Сначала пробуем как числовой литерал (31, 14.2 и т.д.)
+        if (double.TryParse(token, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out value))
+        {
+            return true;
+        }
+
+        // Затем как переменную компилятора
+        if (_variables.TryGetValue(token, out value))
+        {
+            return true;
+        }
+
+        value = 0;
         return false;
     }
 
