@@ -38,6 +38,11 @@ class Program
             {
                 return ExecuteCheckChangesCommand(args, filteredArgs, metrics);
             }
+
+            if (command == "clean-cache")
+            {
+                return ExecuteCleanCacheCommand(filteredArgs);
+            }
             
             // Если первый аргумент - это путь к файлу, выполняем стандартный анализ
             var dprojPath = filteredArgs[0];
@@ -137,16 +142,19 @@ class Program
         Console.WriteLine("  DelphiDepsAnalyzer.exe <путь к .dproj файлу> [опции]");
         Console.WriteLine("  DelphiDepsAnalyzer.exe list-files <путь к .dproj файлу> [опции]");
         Console.WriteLine("  DelphiDepsAnalyzer.exe check-changes <файл_списка_проектов> [опции]");
+        Console.WriteLine("  DelphiDepsAnalyzer.exe clean-cache <путь к папке репозитория>");
         Console.WriteLine("\nКоманды:");
         Console.WriteLine("  (по умолчанию)       Полный анализ зависимостей с выводом в JSON");
         Console.WriteLine("  list-files           Вывод списка файлов с путями относительно корня репозитория");
         Console.WriteLine("  check-changes        Определить проекты, затронутые изменениями между коммитами");
+        Console.WriteLine("  clean-cache          Удалить все папки .deps-cache в репозитории");
         Console.WriteLine("\nПримеры:");
         Console.WriteLine("  DelphiDepsAnalyzer.exe C:\\Projects\\MyApp\\MyApp.dproj");
         Console.WriteLine("  DelphiDepsAnalyzer.exe C:\\Projects\\MyApp\\MyApp.dproj --performance");
         Console.WriteLine("  DelphiDepsAnalyzer.exe list-files C:\\Projects\\MyApp\\MyApp.dproj");
         Console.WriteLine("  DelphiDepsAnalyzer.exe list-files C:\\Projects\\MyApp\\MyApp.dproj --repo-root C:\\Projects");
         Console.WriteLine("  DelphiDepsAnalyzer.exe check-changes Projects.txt --from abc123 --to def456 --output affected.txt");
+        Console.WriteLine("  DelphiDepsAnalyzer.exe clean-cache C:\\Projects\\MyMonorepo");
         Console.WriteLine("\nОпции:");
         Console.WriteLine("  --help, -h               Показать это сообщение");
         Console.WriteLine("  --performance, -p        Показать детальные метрики производительности");
@@ -379,6 +387,54 @@ class Program
         Console.WriteLine("\n✓ Команда list-files успешно выполнена!");
         Console.WriteLine($"Общее время: {metrics.TotalTime.TotalSeconds:F2}с");
 
+        return 0;
+    }
+
+    static int ExecuteCleanCacheCommand(string[] filteredArgs)
+    {
+        if (filteredArgs.Length < 2)
+        {
+            Console.WriteLine("ОШИБКА: Укажите путь к папке репозитория");
+            Console.WriteLine("Пример: DelphiDepsAnalyzer.exe clean-cache C:\\Projects\\MyMonorepo");
+            return 1;
+        }
+
+        var rootPath = Path.GetFullPath(filteredArgs[1]);
+
+        if (!Directory.Exists(rootPath))
+        {
+            Console.WriteLine($"ОШИБКА: Папка не найдена: {rootPath}");
+            return 1;
+        }
+
+        Console.WriteLine($"\nПоиск папок .deps-cache в: {rootPath}");
+
+        var cacheDirs = Directory.GetDirectories(rootPath, ".deps-cache", SearchOption.AllDirectories);
+
+        if (cacheDirs.Length == 0)
+        {
+            Console.WriteLine("Папки .deps-cache не найдены.");
+            return 0;
+        }
+
+        Console.WriteLine($"Найдено: {cacheDirs.Length}\n");
+
+        int deleted = 0;
+        foreach (var dir in cacheDirs)
+        {
+            try
+            {
+                Directory.Delete(dir, recursive: true);
+                Console.WriteLine($"  Удалено: {dir}");
+                deleted++;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  [ОШИБКА] {dir}: {ex.Message}");
+            }
+        }
+
+        Console.WriteLine($"\n✓ Удалено {deleted} из {cacheDirs.Length} папок .deps-cache");
         return 0;
     }
 }

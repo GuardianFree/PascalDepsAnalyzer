@@ -455,24 +455,37 @@ public class ConditionalCompilationEvaluator
 
         expression = expression.Trim();
 
-        // Обработка NOT оператора (префикс)
+        // Обработка NOT оператора (префикс) — "NOT expr" или "NOT(expr)"
         if (expression.StartsWith("NOT ", StringComparison.OrdinalIgnoreCase))
         {
             var subExpression = expression.Substring(4).Trim();
             return !EvaluateExpression(subExpression);
         }
-
-        // Обработка скобок - находим самую внутреннюю пару
-        var openParen = expression.LastIndexOf('(');
-        if (openParen >= 0 && !expression.Substring(0, openParen).EndsWith("DEFINED", StringComparison.OrdinalIgnoreCase))
+        if (expression.StartsWith("NOT(", StringComparison.OrdinalIgnoreCase))
         {
-            var closeParen = expression.IndexOf(')', openParen);
-            if (closeParen > openParen)
+            var subExpression = expression.Substring(3).Trim();
+            return !EvaluateExpression(subExpression);
+        }
+
+        // Снятие внешних скобок, если всё выражение обёрнуто в matching парные скобки
+        // Например: (DEFINED(A) OR DEFINED(B)) → DEFINED(A) OR DEFINED(B)
+        if (expression.StartsWith("(") && expression.EndsWith(")"))
+        {
+            int depth = 0;
+            bool outerMatch = true;
+            for (int i = 0; i < expression.Length; i++)
             {
-                var innerExpression = expression.Substring(openParen + 1, closeParen - openParen - 1);
-                var innerResult = EvaluateExpression(innerExpression);
-                var newExpression = expression.Substring(0, openParen) + (innerResult ? "TRUE" : "FALSE") + expression.Substring(closeParen + 1);
-                return EvaluateExpression(newExpression);
+                if (expression[i] == '(') depth++;
+                else if (expression[i] == ')') depth--;
+                if (depth == 0 && i < expression.Length - 1)
+                {
+                    outerMatch = false;
+                    break;
+                }
+            }
+            if (outerMatch)
+            {
+                return EvaluateExpression(expression.Substring(1, expression.Length - 2));
             }
         }
 
@@ -500,6 +513,14 @@ public class ConditionalCompilationEvaluator
         {
             var symbol = definedMatch.Groups[1].Value;
             return IsDefined(symbol);
+        }
+
+        // Обработка Declared(identifier) — проверяет видимость идентификатора.
+        // В Delphi 12 (Unicode) большинство RTL-идентификаторов объявлены, поэтому возвращаем true.
+        var declaredMatch = Regex.Match(expression, @"^DECLARED\s*\(\s*(\w+)\s*\)$", RegexOptions.IgnoreCase);
+        if (declaredMatch.Success)
+        {
+            return true;
         }
 
         // Обработка литералов TRUE/FALSE (результат вычисления скобок)
@@ -568,11 +589,29 @@ public class ConditionalCompilationEvaluator
     /// </summary>
     private bool TryResolveNumericValue(string token, out double value)
     {
-        // Сначала пробуем как числовой литерал (31, 14.2 и т.д.)
+        // Hex-литерал Delphi: $0100, $FF и т.д.
+        if (token.StartsWith('$') && int.TryParse(token.Substring(1),
+            System.Globalization.NumberStyles.HexNumber,
+            System.Globalization.CultureInfo.InvariantCulture, out var hexVal))
+        {
+            value = hexVal;
+            return true;
+        }
+
+        // Числовой литерал (31, 14.2 и т.д.)
         if (double.TryParse(token, System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out value))
         {
             return true;
+        }
+
+        // SizeOf(Type) — размеры типов Delphi
+        var sizeOfMatch = Regex.Match(token, @"^SizeOf\s*\(\s*(\w+)\s*\)$", RegexOptions.IgnoreCase);
+        if (sizeOfMatch.Success)
+        {
+            var typeName = sizeOfMatch.Groups[1].Value;
+            if (TryGetSizeOf(typeName, out value))
+                return true;
         }
 
         // Затем как переменную компилятора
@@ -583,6 +622,32 @@ public class ConditionalCompilationEvaluator
 
         value = 0;
         return false;
+    }
+
+    /// <summary>
+    /// Возвращает SizeOf для типов Delphi (Unicode, Delphi 2009+).
+    /// Платформозависимые типы (Pointer, NativeInt) определяются по активным символам WIN64/WIN32.
+    /// </summary>
+    private bool TryGetSizeOf(string typeName, out double value)
+    {
+        bool is64Bit = IsDefined("WIN64") || IsDefined("CPUX64");
+        int pointerSize = is64Bit ? 8 : 4;
+
+        value = typeName.ToUpperInvariant() switch
+        {
+            "CHAR" or "WIDECHAR" => 2,
+            "ANSICHAR" => 1,
+            "BYTE" or "SHORTINT" or "BOOLEAN" or "BYTEBOOL" or "ANSISTRING" => 1,
+            "WORD" or "SMALLINT" or "WORDBOOL" => 2,
+            "INTEGER" or "CARDINAL" or "LONGINT" or "LONGWORD" or "LONGBOOL" or "SINGLE" => 4,
+            "INT64" or "UINT64" or "DOUBLE" or "COMP" or "CURRENCY" => 8,
+            "EXTENDED" => is64Bit ? 8 : 10,
+            "POINTER" or "NATIVEINT" or "NATIVEUINT" => pointerSize,
+            "STRING" or "UNICODESTRING" or "WIDESTRING" or "INTERFACE" or "TOBJECT" => pointerSize,
+            _ => -1
+        };
+
+        return value >= 0;
     }
 
     /// <summary>

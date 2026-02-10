@@ -330,5 +330,7 @@ public class DelphiProjectParser
     {
         project.CompilerVariables["CompilerVersion"] = 36.0;
         project.CompilerVariables["RTLVersion"] = 36.0;
+        project.CompilerVariables["Delphi2009Version"] = 20.0;
+        project.CompilerVariables["GDIPVER"] = 0x0100;
     }
 }
